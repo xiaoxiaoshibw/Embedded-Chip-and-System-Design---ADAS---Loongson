@@ -1,0 +1,10 @@
+# ADAS HIL 平台后端依赖（PC 侧 Python 3.10+）
+fastapi>=0.110
+uvicorn[standard]>=0.27
+pydantic>=2.0
+# YAML 解析可选：缺失时 scenario_manager 回退到内置极简解析器
+PyYAML>=6.0
+# 真实 CARLA 接入时另需 CARLA 0.9.16 cp312 wheel（见根 CLAUDE.md），mock 模式不需要
+# 真实模式车载摄像头（内存 JPEG 编码，绕开 CARLA save_to_disk 对中文路径的限制）：
+numpy>=1.24
+pillow>=10.0

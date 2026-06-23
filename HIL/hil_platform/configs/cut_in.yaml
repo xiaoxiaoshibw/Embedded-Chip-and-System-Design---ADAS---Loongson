@@ -1,0 +1,16 @@
+# Cut-in 切入场景
+scenario: cut_in
+title: Cut-in 切入
+map: Town04
+description: 相邻车道车辆在 3s 时切入本车道，触发距离内自车减速避撞并恢复跟车。
+params:
+  ego_speed: 65
+  front_distance: 80
+  front_speed: 40
+  cut_in_speed: 45
+  cut_in_trigger_distance: 25
+  weather: clear
+  comm_delay_ms: 0
+  sensor_noise: 0.02
+  fault_type: none
+  fault_trigger_time: 0

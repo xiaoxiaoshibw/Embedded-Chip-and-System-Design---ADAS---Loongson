@@ -1,0 +1,14 @@
+# AEB 自动紧急制动场景
+scenario: aeb_brake
+title: AEB 自动紧急制动
+map: Town04
+description: 前车在 8s 时全力急刹，SOC 端 TTC 判定触发 AEB，ESP32 硬件地板兜底。
+params:
+  ego_speed: 60
+  front_distance: 40
+  front_speed: 50
+  weather: clear
+  comm_delay_ms: 0
+  sensor_noise: 0.0
+  fault_type: none
+  fault_trigger_time: 8

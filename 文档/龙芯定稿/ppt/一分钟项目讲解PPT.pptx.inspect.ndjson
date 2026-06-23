@@ -1,0 +1,147 @@
+{"kind":"deck","id":"pr/ll3fzo","name":"Deck"}
+{"kind":"layout","layoutId":"cb48044b-b362-418d-aaa1-9d8e589c61c3","name":"Master","type":"master"}
+{"kind":"layout","layoutId":"a4a504d5-3a4b-4f6c-9877-c6f2dfc21b1b","name":"Title Slide","type":"title"}
+{"kind":"slide","id":"sl/efb6kx","slide":1,"title":"1 MINUTE PITCH","textShapes":13}
+{"kind":"textbox","id":"sh/2lszqtcj","slide":1,"text":"1 MINUTE PITCH","textPreview":"1 MINUTE PITCH","textChars":14,"textLines":1,"bbox":[150,38,320,22]}
+{"kind":"textbox","id":"sh/d8bat47y","slide":1,"text":"01 / 06","textPreview":"01 / 06","textChars":7,"textLines":1,"bbox":[1064,40,100,24]}
+{"kind":"textbox","id":"sh/knih4byh","slide":1,"text":"基于龙芯 2K1000LA 的边缘 AI 智能驾驶与主备冗余安全控制系统","textPreview":"基于龙芯 2K1000LA 的边缘 AI 智能驾驶与主备冗余安全控制系统","textChars":36,"textLines":1,"bbox":[150,72,880,122]}
+{"kind":"textbox","id":"sh/vu9knih4","slide":1,"text":"我们做的不是单个 ADAS 功能演示，而是一套面向真车前验证的闭环安全控制平台。","textPreview":"我们做的不是单个 ADAS 功能演示，而是一套面向真车前验证的闭环安全控制平台。","textChars":40,"textLines":1,"bbox":[150,300,500,120]}
+{"kind":"textbox","id":"sh/29gr2p8n","slide":1,"text":"系统把 CARLA/Simulink 联合仿真、龙芯实时控制、备用 SoC 热接管、FreeRTOS MCU 执行仲裁和边缘机器学习连成一条可复盘的安全链路。","textPreview":"系统把 CARLA/Simulink 联合仿真、龙芯实时控制、备用 SoC 热接管、FreeRTOS MCU 执行仲裁和边缘机器学习连成一条可复盘的安全链路。","textChars":79,"textLines":1,"bbox":[150,445,560,92]}
+{"kind":"shape","id":"sh/d0z61032","slide":1,"bbox":[720,356,430,130]}
+{"kind":"shape","id":"sh/kf6dcbul","slide":1,"bbox":[742,380,118,82]}
+{"kind":"textbox","id":"sh/vixczed8","slide":1,"text":"LKA","textPreview":"LKA","textChars":3,"textLines":1,"bbox":[754,390,94,28]}
+{"kind":"textbox","id":"sh/2x4nap4r","slide":1,"text":"车道保持","textPreview":"车道保持","textChars":4,"textLines":1,"bbox":[754,422,94,36]}
+{"kind":"shape","id":"sh/gfmlkjm1","slide":1,"bbox":[876,380,118,82]}
+{"kind":"textbox","id":"sh/90je9cvi","slide":1,"text":"ACC","textPreview":"ACC","textChars":3,"textLines":1,"bbox":[888,390,94,28]}
+{"kind":"textbox","id":"sh/yd0z6103","slide":1,"text":"自适应巡航","textPreview":"自适应巡航","textChars":5,"textLines":1,"bbox":[888,422,94,36]}
+{"kind":"shape","id":"sh/rytsvu9k","slide":1,"bbox":[1010,380,118,82]}
+{"kind":"textbox","id":"sh/g7adsji5","slide":1,"text":"AEB","textPreview":"AEB","textChars":3,"textLines":1,"bbox":[1022,390,94,28]}
+{"kind":"textbox","id":"sh/9s36hcrm","slide":1,"text":"紧急制动","textPreview":"紧急制动","textChars":4,"textLines":1,"bbox":[1022,422,94,36]}
+{"kind":"shape","id":"sh/y1kre1w7","slide":1,"bbox":[150,662,800,0]}
+{"kind":"textbox","id":"sh/rmhk3q5o","slide":1,"text":"讲解词：这个项目面向智能驾驶开发早期验证，核心目标是先在安全、可重复的硬件在环环境里，把控制、执行、故障和证据链跑通。","textPreview":"讲解词：这个项目面向智能驾驶开发早期验证，核心目标是先在安全、可重复的硬件在环环境里，把控制、执行、故障和证据链跑通。","textChars":59,"textLines":1,"bbox":[150,674,860,28]}
+{"kind":"textbox","id":"sh/g3ex0nux","slide":1,"text":"方向键 / 空格翻页，P 打印导出 PDF","textPreview":"方向键 / 空格翻页，P 打印导出 PDF","textChars":21,"textLines":1,"bbox":[1010,674,210,24]}
+{"kind":"notes","id":"nt/efb6kx","slide":1,"text":"这个项目面向智能驾驶开发早期验证，核心目标是先在安全、可重复的硬件在环环境里，把控制、执行、故障和证据链跑通。"}
+{"kind":"slide","id":"sl/ufwd1z","slide":2,"title":"WHAT IS ADAS","textShapes":17}
+{"kind":"textbox","id":"sh/ji5snelo","slide":2,"text":"WHAT IS ADAS","textPreview":"WHAT IS ADAS","textChars":12,"textLines":1,"bbox":[150,38,320,22]}
+{"kind":"textbox","id":"sh/c3ylc7u5","slide":2,"text":"02 / 06","textPreview":"02 / 06","textChars":7,"textLines":1,"bbox":[1064,40,100,24]}
+{"kind":"textbox","id":"sh/1kre1w7m","slide":2,"text":"什么是 ADAS？为什么需要内生安全？","textPreview":"什么是 ADAS？为什么需要内生安全？","textChars":19,"textLines":1,"bbox":[150,72,880,122]}
+{"kind":"textbox","id":"sh/ulwval87","slide":2,"text":"ADAS = Advanced Driver Assistance System，高级驾驶辅助系统。它辅助车辆完成车道保持、跟车巡航、紧急制动等任务；我们的重点不是展示“功能能跑”，而是证明故障发生时系统能确定性降级。","textPreview":"ADAS = Advanced Driver Assistance System，高级驾驶辅助系统。它辅助车辆完成车道保持、跟车巡航、紧急制动等任务；我们的重点不是展示“功能能跑”，而是证明故障发生时系统能确定性降级。","textChars":109,"textLines":1,"bbox":[150,168,900,56]}
+{"kind":"shape","id":"sh/j6tovaho","slide":2,"bbox":[150,238,470,88]}
+{"kind":"shape","id":"sh/crmhk3q5","slide":2,"bbox":[150,238,4,88]}
+{"kind":"textbox","id":"sh/1cfa9w3m","slide":2,"text":"场景一：车道保持（LKA）","textPreview":"场景一：车道保持（LKA）","textChars":13,"textLines":1,"bbox":[166,250,438,24]}
+{"kind":"textbox","id":"sh/qh0fepkz","slide":2,"text":"车辆识别车道与曲率，龙芯 SoC 输出横向控制；弯道前瞻限速把车辆保持在稳定边界内。","textPreview":"车辆识别车道与曲率，龙芯 SoC 输出横向控制；弯道前瞻限速把车辆保持在稳定边界内。","textChars":42,"textLines":1,"bbox":[166,280,438,44]}
+{"kind":"shape","id":"sh/j2t83itg","slide":2,"bbox":[150,342,470,88]}
+{"kind":"shape","id":"sh/byhgn29g","slide":2,"bbox":[150,342,4,88]}
+{"kind":"textbox","id":"sh/idonyd0z","slide":2,"text":"场景二：巡航与紧急制动（ACC / AEB）","textPreview":"场景二：巡航与紧急制动（ACC / AEB）","textChars":22,"textLines":1,"bbox":[166,354,438,24]}
+{"kind":"textbox","id":"sh/t47y1kre","slide":2,"text":"接近静止前车、加塞、行人横穿等场景统一仲裁纵向控制，避免 ACC 与 AEB 互相打架。","textPreview":"接近静止前车、加塞、行人横穿等场景统一仲裁纵向控制，避免 ACC 与 AEB 互相打架。","textChars":44,"textLines":1,"bbox":[166,384,438,44]}
+{"kind":"shape","id":"sh/0je9cvix","slide":2,"bbox":[635,238,470,88]}
+{"kind":"shape","id":"sh/b6xkf6dc","slide":2,"bbox":[635,238,4,88]}
+{"kind":"textbox","id":"sh/il0rqd4v","slide":2,"text":"核心挑战","textPreview":"核心挑战","textChars":4,"textLines":1,"bbox":[651,250,438,24]}
+{"kind":"textbox","id":"sh/tcj6tova","slide":2,"text":"风险不只来自算法误差，也来自主控假活、通信旧帧、执行端误信任、双路控制失效。","textPreview":"风险不只来自算法误差，也来自主控假活、通信旧帧、执行端误信任、双路控制失效。","textChars":38,"textLines":1,"bbox":[651,280,438,44]}
+{"kind":"shape","id":"sh/0rqd4vmt","slide":2,"bbox":[635,342,470,88]}
+{"kind":"shape","id":"sh/bi9s36hc","slide":2,"bbox":[635,342,4,88]}
+{"kind":"textbox","id":"sh/ixczed8v","slide":2,"text":"内生安全理念","textPreview":"内生安全理念","textChars":6,"textLines":1,"bbox":[651,354,438,24]}
+{"kind":"textbox","id":"sh/al87ed8b","slide":2,"text":"主备 SoC 连续接管，MCU 最终执行裁决，机器学习只向更保守方向影响控制。","textPreview":"主备 SoC 连续接管，MCU 最终执行裁决，机器学习只向更保守方向影响控制。","textChars":39,"textLines":1,"bbox":[651,384,438,44]}
+{"kind":"shape","id":"sh/z61032ls","slide":2,"bbox":[150,476,955,124]}
+{"kind":"shape","id":"sh/orytsvu9","slide":2,"bbox":[150,476,4,124]}
+{"kind":"textbox","id":"sh/hcrmhk3q","slide":2,"text":"真实案例 · 为什么“内生安全”不是空谈","textPreview":"真实案例 · 为什么“内生安全”不是空谈","textChars":20,"textLines":1,"bbox":[168,490,320,22]}
+{"kind":"textbox","id":"sh/a9w3m94f","slide":2,"text":"2026-04-22 · 新浪财经","textPreview":"2026-04-22 · 新浪财经","textChars":17,"textLines":1,"bbox":[474,490,160,20]}
+{"kind":"textbox","id":"sh/zupwb2hw","slide":2,"text":"2026 年 4 月，零跑汽车 D19“千里续航实测”直播中，车辆高速行驶时，中控屏 AR 导航界面上的车道线等关键信息突然渲染消失。技术启示：显示异常不一定等于辅助驾驶失效，但外界无法即时判断异常边界与影响范围；问题不在于 bug 会不会出现，而在于当它出现时系统有没有确定性预案。","textPreview":"2026 年 4 月，零跑汽车 D19“千里续航实测”直播中，车辆高速行驶时，中控屏 AR 导航界面上的车道线等关键信息突然渲染消失。技术启示：显示异常不一定等于辅助驾驶失效，但外界无法即时判断异常边界与影响范围；问题不在于 bug 会不会出现，而在于当它出现时系统有没有确...","textChars":142,"textLines":1,"bbox":[168,522,720,62]}
+{"kind":"shape","id":"sh/h0fepkzu","slide":2,"bbox":[150,662,800,0]}
+{"kind":"textbox","id":"sh/65wjudg7","slide":2,"text":"讲解词：ADAS 看似是车道保持、跟车、刹车三个功能，真正难点是故障出现时系统不能失控，所以我们把安全降级能力直接放进架构每一层。","textPreview":"讲解词：ADAS 看似是车道保持、跟车、刹车三个功能，真正难点是故障出现时系统不能失控，所以我们把安全降级能力直接放进架构每一层。","textChars":65,"textLines":1,"bbox":[150,674,860,28]}
+{"kind":"textbox","id":"sh/zqtcj6to","slide":2,"text":"方向键 / 空格翻页，P 打印导出 PDF","textPreview":"方向键 / 空格翻页，P 打印导出 PDF","textChars":21,"textLines":1,"bbox":[1010,674,210,24]}
+{"kind":"image","id":"im/j6tovaho","slide":2,"name":"","geometry":"roundRect","alt":"中控屏车道线渲染逐帧消失案例截图","bbox":[920,492,112,92]}
+{"kind":"notes","id":"nt/ufwd1z","slide":2,"text":"ADAS 看似是车道保持、跟车、刹车三个功能，真正难点是故障出现时系统不能失控，所以我们把安全降级能力直接放进架构每一层。"}
+{"kind":"slide","id":"sl/fj82b4","slide":3,"title":"PROBLEM AND ARCHITECTURE","textShapes":16}
+{"kind":"textbox","id":"sh/6psfil0r","slide":3,"text":"PROBLEM AND ARCHITECTURE","textPreview":"PROBLEM AND ARCHITECTURE","textChars":24,"textLines":1,"bbox":[150,38,320,22]}
+{"kind":"textbox","id":"sh/dcbulwva","slide":3,"text":"03 / 06","textPreview":"03 / 06","textChars":7,"textLines":1,"bbox":[1064,40,100,24]}
+{"kind":"textbox","id":"sh/kre1w7mp","slide":3,"text":"真车前验证最难的，不是“能跑”，而是“失效时仍然可控”","textPreview":"真车前验证最难的，不是“能跑”，而是“失效时仍然可控”","textChars":27,"textLines":1,"bbox":[150,72,880,122]}
+{"kind":"shape","id":"sh/vixczed8","slide":3,"bbox":[150,278,210,160]}
+{"kind":"shape","id":"sh/2x4nap4r","slide":3,"bbox":[150,278,4,160]}
+{"kind":"textbox","id":"sh/donyd0z6","slide":3,"text":"联合仿真","textPreview":"联合仿真","textChars":4,"textLines":1,"bbox":[166,290,178,24]}
+{"kind":"textbox","id":"sh/k3q5o7qp","slide":3,"text":"Simulink 建车辆动力学，CARLA 给交通场景与感知真值。","textPreview":"Simulink 建车辆动力学，CARLA 给交通场景与感知真值。","textChars":33,"textLines":1,"bbox":[166,320,178,116]}
+{"kind":"textbox","id":"sh/vu9knih4","slide":3,"text":">","textPreview":">","textChars":1,"textLines":1,"bbox":[368,338,26,32]}
+{"kind":"shape","id":"sh/29gr2p8n","slide":3,"bbox":[395,278,210,160]}
+{"kind":"shape","id":"sh/kre1w7mp","slide":3,"bbox":[395,278,4,160]}
+{"kind":"textbox","id":"sh/dcbulwva","slide":3,"text":"龙芯主控","textPreview":"龙芯主控","textChars":4,"textLines":1,"bbox":[411,290,178,24]}
+{"kind":"textbox","id":"sh/6psfil0r","slide":3,"text":"2K1000LA 以 100 Hz 跑 LKA/ACC/AEB 控制内核。","textPreview":"2K1000LA 以 100 Hz 跑 LKA/ACC/AEB 控制内核。","textChars":37,"textLines":1,"bbox":[411,320,178,116]}
+{"kind":"textbox","id":"sh/val87ed8","slide":3,"text":">","textPreview":">","textChars":1,"textLines":1,"bbox":[613,338,26,32]}
+{"kind":"shape","id":"sh/k3q5o7qp","slide":3,"bbox":[640,278,210,160]}
+{"kind":"shape","id":"sh/donyd0z6","slide":3,"bbox":[640,278,4,160]}
+{"kind":"textbox","id":"sh/2x4nap4r","slide":3,"text":"备用 SoC","textPreview":"备用 SoC","textChars":6,"textLines":1,"bbox":[656,290,178,24]}
+{"kind":"textbox","id":"sh/vixczed8","slide":3,"text":"监听心跳和 SEQ 状态，主控失效时热接管。","textPreview":"监听心跳和 SEQ 状态，主控失效时热接管。","textChars":22,"textLines":1,"bbox":[656,320,178,116]}
+{"kind":"textbox","id":"sh/kf6dcbul","slide":3,"text":">","textPreview":">","textChars":1,"textLines":1,"bbox":[858,338,26,32]}
+{"kind":"shape","id":"sh/d0z61032","slide":3,"bbox":[885,278,210,160]}
+{"kind":"shape","id":"sh/dsji5sne","slide":3,"bbox":[885,278,4,160]}
+{"kind":"textbox","id":"sh/o7qpg3ex","slide":3,"text":"MCU 执行端","textPreview":"MCU 执行端","textChars":7,"textLines":1,"bbox":[901,290,178,24]}
+{"kind":"textbox","id":"sh/vmtwra5g","slide":3,"text":"CRC、来源仲裁、AEB 地板和看门狗做最后裁决。","textPreview":"CRC、来源仲裁、AEB 地板和看门狗做最后裁决。","textChars":25,"textLines":1,"bbox":[901,320,178,116]}
+{"kind":"shape","id":"sh/61032lsz","slide":3,"bbox":[150,662,800,0]}
+{"kind":"textbox","id":"sh/d4vmtwra","slide":3,"text":"讲解词：我们把系统分成仿真输入、龙芯控制、备控冗余和 MCU 执行安全四层，每层职责清楚，故障不会直接穿透到执行器。","textPreview":"讲解词：我们把系统分成仿真输入、龙芯控制、备控冗余和 MCU 执行安全四层，每层职责清楚，故障不会直接穿透到执行器。","textChars":58,"textLines":1,"bbox":[150,674,860,28]}
+{"kind":"textbox","id":"sh/oj2t83it","slide":3,"text":"方向键 / 空格翻页，P 打印导出 PDF","textPreview":"方向键 / 空格翻页，P 打印导出 PDF","textChars":21,"textLines":1,"bbox":[1010,674,210,24]}
+{"kind":"notes","id":"nt/fj82b4","slide":3,"text":"我们把系统分成仿真输入、龙芯控制、备控冗余和 MCU 执行安全四层，每层职责清楚，故障不会直接穿透到执行器。"}
+{"kind":"slide","id":"sl/qhd5m3","slide":4,"title":"THREE INNOVATIONS","textShapes":12}
+{"kind":"textbox","id":"sh/8jqh0fep","slide":4,"text":"THREE INNOVATIONS","textPreview":"THREE INNOVATIONS","textChars":17,"textLines":1,"bbox":[150,38,320,22]}
+{"kind":"textbox","id":"sh/fyxobm58","slide":4,"text":"04 / 06","textPreview":"04 / 06","textChars":7,"textLines":1,"bbox":[1064,40,100,24]}
+{"kind":"textbox","id":"sh/qd4vmtwr","slide":4,"text":"三项创新围绕一条安全链路展开","textPreview":"三项创新围绕一条安全链路展开","textChars":14,"textLines":1,"bbox":[150,72,880,122]}
+{"kind":"shape","id":"sh/xczed8v6","slide":4,"bbox":[150,224,430,94]}
+{"kind":"shape","id":"sh/8v6psfil","slide":4,"bbox":[150,224,4,94]}
+{"kind":"textbox","id":"sh/fa9w3m94","slide":4,"text":"1  主备无感接管","textPreview":"1  主备无感接管","textChars":9,"textLines":1,"bbox":[166,236,398,24]}
+{"kind":"textbox","id":"sh/qpg3ex0n","slide":4,"text":"SEQ 心跳识别假活，控制状态种子继承，备控热待机消除接管冲击。","textPreview":"SEQ 心跳识别假活，控制状态种子继承，备控热待机消除接管冲击。","textChars":32,"textLines":1,"bbox":[166,266,398,50]}
+{"kind":"shape","id":"sh/1gvy90je","slide":4,"bbox":[150,338,430,94]}
+{"kind":"shape","id":"sh/8z25kb6x","slide":4,"bbox":[150,338,4,94]}
+{"kind":"textbox","id":"sh/a9w3m94f","slide":4,"text":"2  MCU 独立安全裁决","textPreview":"2  MCU 独立安全裁决","textChars":13,"textLines":1,"bbox":[166,350,398,24]}
+{"kind":"textbox","id":"sh/zupwb2hw","slide":4,"text":"执行端不盲信 SoC，先验帧可信、再判来源、最后输出控制。","textPreview":"执行端不盲信 SoC，先验帧可信、再判来源、最后输出控制。","textChars":29,"textLines":1,"bbox":[166,380,398,50]}
+{"kind":"shape","id":"sh/sfil0rqd","slide":4,"bbox":[150,452,430,94]}
+{"kind":"shape","id":"sh/h0fepkzu","slide":4,"bbox":[150,452,4,94]}
+{"kind":"textbox","id":"sh/al87ed8b","slide":4,"text":"3  规则控制 + 机器学习软融合","textPreview":"3  规则控制 + 机器学习软融合","textChars":17,"textLines":1,"bbox":[166,464,398,24]}
+{"kind":"textbox","id":"sh/z61032ls","slide":4,"text":"ACC/AEB 统一仲裁，ML 只允许向更保守方向补充风险。","textPreview":"ACC/AEB 统一仲裁，ML 只允许向更保守方向补充风险。","textChars":30,"textLines":1,"bbox":[166,494,398,50]}
+{"kind":"shape","id":"sh/orytsvu9","slide":4,"bbox":[630,218,470,330]}
+{"kind":"textbox","id":"sh/6xkf6dcb","slide":4,"text":"总体架构：联合仿真、双 SoC、MCU 安全域与边缘分析","textPreview":"总体架构：联合仿真、双 SoC、MCU 安全域与边缘分析","textChars":28,"textLines":1,"bbox":[650,524,430,22]}
+{"kind":"shape","id":"sh/zed8v6ps","slide":4,"bbox":[150,662,800,0]}
+{"kind":"textbox","id":"sh/nih4byhg","slide":4,"text":"讲解词：第一项保证主控掉线后连续接上，第二项保证错误命令不能直接执行，第三项保证智能判险不越过规则安全边界。","textPreview":"讲解词：第一项保证主控掉线后连续接上，第二项保证错误命令不能直接执行，第三项保证智能判险不越过规则安全边界。","textChars":54,"textLines":1,"bbox":[150,674,860,28]}
+{"kind":"textbox","id":"sh/yxobm58z","slide":4,"text":"方向键 / 空格翻页，P 打印导出 PDF","textPreview":"方向键 / 空格翻页，P 打印导出 PDF","textChars":21,"textLines":1,"bbox":[1010,674,210,24]}
+{"kind":"image","id":"im/q1orytsv","slide":4,"name":"","geometry":"roundRect","alt":"系统总体架构图","bbox":[648,235,434,282]}
+{"kind":"notes","id":"nt/qhd5m3","slide":4,"text":"第一项保证主控掉线后连续接上，第二项保证错误命令不能直接执行，第三项保证智能判险不越过规则安全边界。"}
+{"kind":"slide","id":"sl/0v8npz","slide":5,"title":"MEASURED RESULTS","textShapes":18}
+{"kind":"textbox","id":"sh/crmhk3q5","slide":5,"text":"MEASURED RESULTS","textPreview":"MEASURED RESULTS","textChars":16,"textLines":1,"bbox":[150,38,320,22]}
+{"kind":"textbox","id":"sh/j6tovaho","slide":5,"text":"05 / 06","textPreview":"05 / 06","textChars":7,"textLines":1,"bbox":[1064,40,100,24]}
+{"kind":"textbox","id":"sh/ulwval87","slide":5,"text":"关键结果都用同一控制栈实测闭环验证","textPreview":"关键结果都用同一控制栈实测闭环验证","textChars":17,"textLines":1,"bbox":[150,72,880,122]}
+{"kind":"shape","id":"sh/1kre1w7m","slide":5,"bbox":[150,238,420,318]}
+{"kind":"shape","id":"sh/c3ylc7u5","slide":5,"bbox":[170,258,176,74]}
+{"kind":"textbox","id":"sh/ji5snelo","slide":5,"text":"47 ms","textPreview":"47 ms","textChars":5,"textLines":1,"bbox":[182,268,152,28]}
+{"kind":"textbox","id":"sh/uxc3ylc7","slide":5,"text":"主备接管时延\n基线 557 ms","textPreview":"主备接管时延 | 基线 557 ms","textChars":16,"textLines":2,"bbox":[186,300,144,26]}
+{"kind":"shape","id":"sh/1w7mp0bi","slide":5,"bbox":[364,258,176,74]}
+{"kind":"textbox","id":"sh/8bat47y1","slide":5,"text":"57 -> 0","textPreview":"57 -> 0","textChars":7,"textLines":1,"bbox":[376,268,152,28]}
+{"kind":"textbox","id":"sh/ytsvu9kn","slide":5,"text":"静止前车 AEB\n误触发归零","textPreview":"静止前车 AEB | 误触发归零","textChars":14,"textLines":2,"bbox":[380,300,144,26]}
+{"kind":"shape","id":"sh/neloj2t8","slide":5,"bbox":[170,346,176,74]}
+{"kind":"textbox","id":"sh/czed8v6p","slide":5,"text":"0.99","textPreview":"0.99","textChars":4,"textLines":1,"bbox":[182,356,152,28]}
+{"kind":"textbox","id":"sh/5kb6xkf6","slide":5,"text":"加塞场景\nML 风险峰值","textPreview":"加塞场景 | ML 风险峰值","textChars":12,"textLines":2,"bbox":[186,388,144,26]}
+{"kind":"shape","id":"sh/u54zidon","slide":5,"bbox":[364,346,176,74]}
+{"kind":"textbox","id":"sh/nqxs72x4","slide":5,"text":"108 km/h","textPreview":"108 km/h","textChars":8,"textLines":1,"bbox":[376,356,152,28]}
+{"kind":"textbox","id":"sh/cbulwval","slide":5,"text":"弯道前瞻限速\n全程有界","textPreview":"弯道前瞻限速 | 全程有界","textChars":11,"textLines":2,"bbox":[380,388,144,26]}
+{"kind":"shape","id":"sh/5sneloj2","slide":5,"bbox":[170,434,176,74]}
+{"kind":"textbox","id":"sh/y90je9cv","slide":5,"text":"203 ms","textPreview":"203 ms","textChars":6,"textLines":1,"bbox":[182,444,152,28]}
+{"kind":"textbox","id":"sh/nuxc3ylc","slide":5,"text":"双路失效\nMCU 安全制动","textPreview":"双路失效 | MCU 安全制动","textChars":13,"textLines":2,"bbox":[186,476,144,26]}
+{"kind":"shape","id":"sh/fmlkjm1c","slide":5,"bbox":[364,434,176,74]}
+{"kind":"textbox","id":"sh/q1orytsv","slide":5,"text":"0 碰撞","textPreview":"0 碰撞","textChars":4,"textLines":1,"bbox":[376,444,152,28]}
+{"kind":"textbox","id":"sh/xs72x4na","slide":5,"text":"110 次接管扫描\n全程 0 碰撞","textPreview":"110 次接管扫描 | 全程 0 碰撞","textChars":17,"textLines":2,"bbox":[380,476,144,26]}
+{"kind":"shape","id":"sh/87ed8bat","slide":5,"bbox":[620,280,500,230]}
+{"kind":"textbox","id":"sh/qtcj6tov","slide":5,"text":"系统综合对比：功能、指标与安全能力覆盖","textPreview":"系统综合对比：功能、指标与安全能力覆盖","textChars":19,"textLines":1,"bbox":[640,478,460,22]}
+{"kind":"shape","id":"sh/1gvy90je","slide":5,"bbox":[150,662,800,0]}
+{"kind":"textbox","id":"sh/8z25kb6x","slide":5,"text":"讲解词：这些数字说明平台不是只做展示动画，而是在故障注入、接近静止前车、加塞、行人和高速弯道等场景里完成了闭环验证。","textPreview":"讲解词：这些数字说明平台不是只做展示动画，而是在故障注入、接近静止前车、加塞、行人和高速弯道等场景里完成了闭环验证。","textChars":58,"textLines":1,"bbox":[150,674,860,28]}
+{"kind":"textbox","id":"sh/fa9w3m94","slide":5,"text":"方向键 / 空格翻页，P 打印导出 PDF","textPreview":"方向键 / 空格翻页，P 打印导出 PDF","textChars":21,"textLines":1,"bbox":[1010,674,210,24]}
+{"kind":"image","id":"im/8v6psfil","slide":5,"name":"","geometry":"roundRect","alt":"系统综合对比图","bbox":[640,300,460,170]}
+{"kind":"notes","id":"nt/0v8npz","slide":5,"text":"这些数字说明平台不是只做展示动画，而是在故障注入、接近静止前车、加塞、行人和高速弯道等场景里完成了闭环验证。"}
+{"kind":"slide","id":"sl/x7kiou","slide":6,"title":"VALUE","textShapes":8}
+{"kind":"textbox","id":"sh/1gvy90je","slide":6,"text":"VALUE","textPreview":"VALUE","textChars":5,"textLines":1,"bbox":[150,38,320,22]}
+{"kind":"textbox","id":"sh/qtcj6tov","slide":6,"text":"06 / 06","textPreview":"06 / 06","textChars":7,"textLines":1,"bbox":[1064,40,100,24]}
+{"kind":"textbox","id":"sh/je9cvixc","slide":6,"text":"项目价值：把国产嵌入式平台做成可迁移的 ADAS 安全验证底座","textPreview":"项目价值：把国产嵌入式平台做成可迁移的 ADAS 安全验证底座","textChars":31,"textLines":1,"bbox":[150,72,880,122]}
+{"kind":"textbox","id":"sh/87ed8bat","slide":6,"text":"系统最终回答三个工程问题：\n控制能不能接上、执行端能不能信、智能判险会不会越界。","textPreview":"系统最终回答三个工程问题： | 控制能不能接上、执行端能不能信、智能判险会不会越界。","textChars":40,"textLines":2,"bbox":[150,292,520,136]}
+{"kind":"textbox","id":"sh/xs72x4na","slide":6,"text":"答案都落在可运行代码、硬件闭环、实验数据和图表证据上。后续接入摄像头、雷达、CAN 和真实执行器时，现有分层安全边界可以继续复用。","textPreview":"答案都落在可运行代码、硬件闭环、实验数据和图表证据上。后续接入摄像头、雷达、CAN 和真实执行器时，现有分层安全边界可以继续复用。","textChars":65,"textLines":1,"bbox":[150,450,540,88]}
+{"kind":"shape","id":"sh/q1orytsv","slide":6,"bbox":[742,312,360,164]}
+{"kind":"textbox","id":"sh/8jqh0fep","slide":6,"text":"从主备接管到执行安全，形成可解释、可复盘的工程链路","textPreview":"从主备接管到执行安全，形成可解释、可复盘的工程链路","textChars":25,"textLines":1,"bbox":[762,456,320,22]}
+{"kind":"shape","id":"sh/x4nap4r6","slide":6,"bbox":[150,662,800,0]}
+{"kind":"textbox","id":"sh/1w7mp0bi","slide":6,"text":"讲解词：一句话总结：这个项目把龙芯实时控制、本地机器学习、主备冗余和 MCU 安全兜底贯通起来，为真实车辆控制器迁移提供了工程基础。","textPreview":"讲解词：一句话总结：这个项目把龙芯实时控制、本地机器学习、主备冗余和 MCU 安全兜底贯通起来，为真实车辆控制器迁移提供了工程基础。","textChars":66,"textLines":1,"bbox":[150,674,860,28]}
+{"kind":"textbox","id":"sh/8bat47y1","slide":6,"text":"方向键 / 空格翻页，P 打印导出 PDF","textPreview":"方向键 / 空格翻页，P 打印导出 PDF","textChars":21,"textLines":1,"bbox":[1010,674,210,24]}
+{"kind":"image","id":"im/yhgn29gr","slide":6,"name":"","geometry":"roundRect","alt":"主备无缝接管证据图","bbox":[760,330,324,120]}
+{"kind":"notes","id":"nt/x7kiou","slide":6,"text":"一句话总结：这个项目把龙芯实时控制、本地机器学习、主备冗余和 MCU 安全兜底贯通起来，为真实车辆控制器迁移提供了工程基础。"}

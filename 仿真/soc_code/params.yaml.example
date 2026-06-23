@@ -1,0 +1,42 @@
+# 启动期参数覆盖示例
+#
+# 用法：复制为 params.yaml（与 config.py 同目录），ADAS.py 启动时自动加载，
+# 用文件值覆盖 config.py 中同名常量。删除 params.yaml 即恢复代码默认值。
+#
+# 规则：
+#   - 仅能覆盖已存在的全大写标量常量（int/float/str/bool），名字写错会被忽略。
+#   - 值的单位与 config.py 中该常量一致（例如 MAX_DELTA 是弧度，不是角度）。
+#   - 装了 PyYAML 用标准 YAML 解析；没装则回退极简 `KEY: value` 扁平解析。
+#   - 这是启动期覆盖；运行中热调增益请用 ROS 话题 /adas/set_param。
+#
+# 常用调参示例（按需取消注释）：
+
+# 横向航向 PID
+# K_PSI_P: 0.9
+# K_PSI_I: 0.03
+# K_PSI_D: 0.03
+
+# ACC 纵向增益
+# ACC_KD: 0.4
+# ACC_KV: 0.8
+
+# 仿真降频（Jetson 算力吃紧时）
+# LOOP_HZ: 50
+
+# 跟车时距 / 巡航设定速度
+# ACC_TIME_GAP: 2.0
+# DRIVER_SET_SPEED: 8.0
+
+# ─── class-aware AEB / 安全冗余（行人/障碍场景）───
+# 注：字典常量（AEB_CLASS_*）目前**不**走 params.yaml 覆盖通路
+# （_load_param_overrides 只接受标量），改字典需直接编辑 config.py。
+# 这里列出可调的标量项：
+#
+# class 话题陈旧告警阈值（秒）。多目标启用且 /car{N}_class 停更超过此时间
+# 限频 WARNING 并写遥测；不主动降级 lead_cls（保留最后一次值更接近实际威胁）。
+# LEAD_CLASS_STALE_TIMEOUT_S: 2.0
+#
+# 主备接管：主机非 AEB 但前车 cls 为 PEDESTRIAN/OBSTACLE 时备机用的衰减速率 (m/s³)。
+# 数值越小变化越慢——避免备机接管瞬间对行人/障碍快速放车。
+# 不要改到 < 2.0（与执行器响应频段重叠会引入震荡）。
+# TAKEOVER_LON_RATE_VULNERABLE: 4.0
