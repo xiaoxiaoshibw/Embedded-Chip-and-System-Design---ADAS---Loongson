@@ -1,0 +1,14 @@
+# LKA 车道保持（弯道）场景
+scenario: lka_curve
+title: LKA 车道保持（弯道）
+map: Town04
+description: 无前车，连续弯道下考察曲率前馈 + 横向误差修正，车辆保持居中。
+params:
+  ego_speed: 70
+  front_distance: 0
+  front_speed: 0
+  weather: clear
+  comm_delay_ms: 0
+  sensor_noise: 0.0
+  fault_type: none
+  fault_trigger_time: 0

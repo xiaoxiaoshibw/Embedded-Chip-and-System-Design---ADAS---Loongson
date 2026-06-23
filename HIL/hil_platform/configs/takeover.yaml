@@ -1,0 +1,14 @@
+# 主控故障接管场景（双 Nano + ESP32 仲裁冗余）
+scenario: takeover
+title: 主控故障接管
+map: Town04
+description: 跟车行驶中，12s 时主控 Nano A 发生 seq 停滞（假活），ESP32 检测后切换至 Nano B，车辆保持稳定且不碰撞。
+params:
+  ego_speed: 55
+  front_distance: 30
+  front_speed: 40
+  weather: rain
+  comm_delay_ms: 50
+  sensor_noise: 0.02
+  fault_type: seq_stuck
+  fault_trigger_time: 12

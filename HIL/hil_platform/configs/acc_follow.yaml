@@ -1,0 +1,14 @@
+# ACC 自适应巡航跟车场景
+scenario: acc_follow
+title: ACC 自适应巡航跟车
+map: Town04
+description: 前车温和变速，自车保持安全时距自适应跟随。
+params:
+  ego_speed: 60
+  front_distance: 45
+  front_speed: 40
+  weather: clear
+  comm_delay_ms: 0
+  sensor_noise: 0.0
+  fault_type: none
+  fault_trigger_time: 0

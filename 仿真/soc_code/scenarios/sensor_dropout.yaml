@@ -1,0 +1,24 @@
+# 传感器丢失：前车信号间歇性丢失（dropout），检验 LeadTracker 记忆与平滑过渡
+# 前车在 6-10s 信号丢失，LeadTracker 应保持记忆位置，不触发误 AEB
+name: sensor_dropout
+duration_s: 20.0
+road:
+  curvature: 0.0
+ego:
+  v0: 8.0
+  lane_offset0: 0.0
+lead:
+  present: true
+  gap0: 25.0
+  v0: 8.0
+  accel_profile:
+    - {t: 0.0, a: 0.0}
+  lateral_profile:
+    - {t: 0.0, y: 0.0}
+  dropout:
+    - {t_start: 6.0, t_end: 10.0}   # 前车信号丢失 4 秒
+expect:
+  collision: false
+  min_gap_min: 5.0
+  jerk_rms_max: 8.0
+  aeb_activations_max: 0   # 信号丢失期间不应误触发 AEB

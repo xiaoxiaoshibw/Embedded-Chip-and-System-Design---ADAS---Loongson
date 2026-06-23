@@ -1,0 +1,67 @@
+# ============================================================
+#  自动辅助驾驶仿真平台 —— 仅上传源码与文档（不含大体积二进制）
+# ============================================================
+
+# CARLA 0.9.16 预编译二进制分发（~18GB，切勿上传）
+CALRA/
+
+# lx/ 是独立 Git 仓库（SOC 控制栈、MCU 固件、ML 模型），根仓库不跟踪
+lx/
+
+# 演示打包 zip
+*.zip
+
+# ESP-IDF 编译产物（固件源码在 main/，构建输出不上传）
+lx/MCUcode/ADAS_Test/build/
+build/
+managed_components/
+sdkconfig.old
+*.bin
+*.elf
+*.map
+
+# 机器学习数据集与权重（>100MB 超 GitHub 上限；只留训练/推理代码）
+lx/ml/ml/data/
+lx/ml/ml/checkpoints/
+lx/ml/ml/plots/
+*.mat
+*.onnx
+*.pt
+*.pth
+*.joblib
+*.pkl
+*.h5
+*.npz
+
+# 视频帧 / 生成的逐帧图片
+**/video_frames/
+
+# 二进制办公文档（正文已有 .md 版本）
+*.docx
+*.pptx
+*.xlsx
+
+# Python 缓存与测试产物
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.coverage
+.pytest_cache/
+*.egg-info/
+
+# 运行时日志 / 遥测 / 上云缓存
+*.log
+**/logs/
+**/output/cloud_outbox/
+
+# 编辑器 / 工具 / 系统
+.claude/
+.codex/
+.agents/
+CLAUDE_CODEX_MEMORY/
+.omo/
+.idea/
+.vscode/
+.DS_Store
+Thumbs.db

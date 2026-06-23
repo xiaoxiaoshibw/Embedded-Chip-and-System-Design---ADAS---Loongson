@@ -1,0 +1,12 @@
+# 运行产物：保留目录，忽略实验记录
+runs/*
+!runs/.gitkeep
+
+# Python
+__pycache__/
+*.pyc
+logs_server.txt
+
+# 前端
+web/node_modules/
+web/dist/
