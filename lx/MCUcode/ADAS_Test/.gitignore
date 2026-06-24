@@ -1,0 +1,10 @@
+# ESP-IDF ADAS AEB Project
+
+build/
+.DS_Store
+*.swp
+*.swo
+*~
+.vscode/
+.ideadic/
+*.o

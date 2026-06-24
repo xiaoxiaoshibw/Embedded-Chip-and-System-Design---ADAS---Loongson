@@ -1,0 +1,11 @@
+# Optional: ADAS AEB configuration
+
+# UART Configuration
+# (Pin/baudrate are hardcoded in main.c as #define; these are kept for documentation)
+CONFIG_UART_RX_PIN=16
+CONFIG_UART_TX_PIN=17
+CONFIG_UART_BAUDRATE=115200
+
+# NOTE: AEB parameters (TTC threshold, danger dist, max decel) are defined as
+# static const float in main.c, not via Kconfig. The old CONFIG_* entries were
+# removed as they were unused.
