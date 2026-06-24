@@ -47,8 +47,18 @@ export const api = {
     health: () => req<HardwareHealth>("GET", "/api/hardware/health"),
     restartAdas: (target: "primary" | "backup" | "both") =>
       req<HardwareHealth>("POST", "/api/hardware/adas/restart", { target }),
+    deployAdas: () => req<HardwareHealth>("POST", "/api/hardware/adas/deploy"),
     startGateway: (source: "esp32" | "jetson") =>
       req<HardwareHealth>("POST", "/api/hardware/gateway/start", { source }),
+    deployGateway: () => req<HardwareHealth>("POST", "/api/hardware/gateway/deploy"),
+    resources: () => req<HardwareHealth>("GET", "/api/hardware/resources"),
+    applyCpu: () => req<HardwareHealth>("POST", "/api/hardware/cpu/apply"),
+    startEdge: () => req<HardwareHealth>("POST", "/api/hardware/edge/start"),
+    syncEdge: () => req<HardwareHealth>("POST", "/api/hardware/edge/sync"),
+    stopPerception: () => req<HardwareHealth>("POST", "/api/hardware/perception/stop"),
+    startCarla: () => req<HardwareHealth>("POST", "/api/hardware/carla/start"),
+    prepareHil: (source: "esp32" | "jetson", deploy = true, carla = true) =>
+      req<HardwareHealth>("POST", "/api/hardware/hil/prepare", { source, deploy, carla }),
     restoreNanos: () => req<HardwareHealth>("POST", "/api/hardware/nanos/restore"),
   },
 

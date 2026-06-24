@@ -12,7 +12,18 @@ import threading
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING
 
-from config import ACC_KA, ACC_KD, ACC_KI, ACC_KV, K_PSI_D, K_PSI_I, K_PSI_P
+from config import (
+    ACC_KA,
+    ACC_KD,
+    ACC_KI,
+    ACC_KV,
+    DRIVER_SET_SPEED,
+    K_PSI_D,
+    K_PSI_I,
+    K_PSI_P,
+    ROAD_LIMIT_SPEED,
+    SYSTEM_MAX_CRUISE,
+)
 
 if TYPE_CHECKING:
     from control.aeb_alert import AebAlertManager
@@ -125,6 +136,10 @@ class ControlMemory:
     lane_warn_margin: float = 0.0           # 车道预警余量 (m)
     lane_hard_margin: float = 0.0            # 车道硬边界余量 (m)
     gains: ControlGains = field(default_factory=ControlGains)  # 运行时控制增益
+    driver_set_speed: float = DRIVER_SET_SPEED
+    system_max_cruise: float = SYSTEM_MAX_CRUISE
+    road_limit_speed: float = ROAD_LIMIT_SPEED
+    runtime_command_seq: int = 0
     # 横向控制帧门控：仿真端以 20Hz 发布感知，本循环以 100Hz 运行，
     # 仅在道路航向有新帧时推进横向有状态计算，其余拍沿用上一帧结果。
     lat_last_road_rx: float = -1.0           # 上次已处理的道路航向帧接收时刻

@@ -35,6 +35,7 @@ from core.state_machine import InvalidTransition
 from core import hardware_control
 from server.schemas import (
     HardwareGatewayRequest,
+    HardwarePrepareRequest,
     HardwareRestartRequest,
     InjectFaultRequest,
     LoadScenarioRequest,
@@ -137,9 +138,54 @@ def hardware_restart_adas(req: HardwareRestartRequest):
     return _guard(lambda: hardware_control.restart_adas(req.target))
 
 
+@app.post("/api/hardware/adas/deploy")
+def hardware_deploy_adas():
+    return _guard(lambda: hardware_control.deploy_adas_code())
+
+
 @app.post("/api/hardware/gateway/start")
 def hardware_start_gateway(req: HardwareGatewayRequest):
     return _guard(lambda: hardware_control.start_gateway(req.source))
+
+
+@app.post("/api/hardware/gateway/deploy")
+def hardware_deploy_gateway():
+    return _guard(lambda: hardware_control.deploy_gateway())
+
+
+@app.get("/api/hardware/resources")
+def hardware_resources():
+    return _guard(lambda: hardware_control.resource_status())
+
+
+@app.post("/api/hardware/cpu/apply")
+def hardware_apply_cpu_affinity():
+    return _guard(lambda: hardware_control.apply_cpu_affinity())
+
+
+@app.post("/api/hardware/edge/start")
+def hardware_start_edge_compute():
+    return _guard(lambda: hardware_control.start_edge_compute())
+
+
+@app.post("/api/hardware/edge/sync")
+def hardware_sync_edge_results():
+    return _guard(lambda: hardware_control.sync_edge_results())
+
+
+@app.post("/api/hardware/perception/stop")
+def hardware_stop_perception():
+    return _guard(lambda: hardware_control.stop_perception_sim())
+
+
+@app.post("/api/hardware/carla/start")
+def hardware_start_carla():
+    return _guard(lambda: hardware_control.start_carla())
+
+
+@app.post("/api/hardware/hil/prepare")
+def hardware_prepare_hil(req: HardwarePrepareRequest):
+    return _guard(lambda: hardware_control.prepare_hil(req.source, req.deploy, req.carla))
 
 
 @app.post("/api/hardware/nanos/restore")

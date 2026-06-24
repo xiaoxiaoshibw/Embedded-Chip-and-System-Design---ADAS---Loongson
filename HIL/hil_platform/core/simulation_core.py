@@ -269,6 +269,8 @@ class SimulationCore:
                             world.set_weather(str(params["weather"]))
                         except Exception:
                             pass
+                if hasattr(self.bridge, "set_runtime_params"):
+                    self.bridge.set_runtime_params(params)
             return {"params": params}
 
     def inject_fault(self, fault_type: str, target: str = "nano_a") -> Dict[str, Any]:

@@ -1,0 +1,1 @@
+{"ts":1782223723.4331748,"host":"nano","role":"backup","loadavg":"1.04 1.17 1.21 3/656 546231","temp_c":50.0,"adas":{"pid":545415,"psr":1,"cpu":46.0,"mem":6.0,"rss_kb":244216,"cmd":"python3 ADAS.py --role backup"},"log":{"last_log":"2026-06-23 23:06:51,683 | INFO | [ML] bridge enabled, backend=onnx threads=1 mode=async interval=10 cycles","seq":null,"tail_lines":6}}

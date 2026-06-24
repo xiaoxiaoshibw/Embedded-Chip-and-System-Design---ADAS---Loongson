@@ -60,8 +60,15 @@ export function HardwareControlPanel({ controlSource }: { controlSource?: string
     setLast("");
     try {
       const r = await fn();
-      setHealth(r);
-      setLast(`${label} done: ${shortLine(JSON.stringify({ ok: r.ok }))}`);
+      const preparedHealth = (r.steps as { health?: HardwareHealth } | undefined)?.health;
+      if (preparedHealth || r.primary || r.backup) {
+        setHealth(preparedHealth ?? r);
+      } else {
+        const fresh = await api.hardware.health();
+        setHealth(fresh);
+      }
+      const failedStep = (r as { failed_step?: string }).failed_step;
+      setLast(`${label} done: ${shortLine(JSON.stringify({ ok: r.ok, failed_step: failedStep }))}`);
     } catch (e) {
       setErr((e as Error).message);
     } finally {
@@ -82,6 +89,36 @@ export function HardwareControlPanel({ controlSource }: { controlSource?: string
       </div>
 
       <div className="btn-row">
+        <button className="primary" disabled={!!busy} onClick={() => run("Prepare HIL ESP32", () => api.hardware.prepareHil("esp32", true, true))}>
+          一键准备 HIL(ESP32)
+        </button>
+        <button className="primary" disabled={!!busy} onClick={() => run("Prepare HIL Jetson", () => api.hardware.prepareHil("jetson", true, true))}>
+          一键准备 HIL(Jetson)
+        </button>
+        <button disabled={!!busy} onClick={() => run("Start CARLA", api.hardware.startCarla)}>
+          启动 CARLA
+        </button>
+        <button disabled={!!busy} onClick={() => run("Deploy Gateway", api.hardware.deployGateway)}>
+          部署 Nano Gateway
+        </button>
+        <button disabled={!!busy} onClick={() => run("Deploy ADAS", api.hardware.deployAdas)}>
+          部署 ADAS
+        </button>
+        <button disabled={!!busy} onClick={() => run("Apply CPU affinity", api.hardware.applyCpu)}>
+          CPU绑核
+        </button>
+        <button disabled={!!busy} onClick={() => run("Nano resources", api.hardware.resources)}>
+          Nano资源
+        </button>
+        <button disabled={!!busy} onClick={() => run("Start edge on 124", api.hardware.startEdge)}>
+          124边缘计算
+        </button>
+        <button disabled={!!busy} onClick={() => run("Sync edge results", api.hardware.syncEdge)}>
+          回传边缘结果
+        </button>
+        <button disabled={!!busy} onClick={() => run("Stop perception_sim", api.hardware.stopPerception)}>
+          停止旧感知
+        </button>
         <button className="primary" disabled={!!busy} onClick={() => run("健康检查", api.hardware.health)}>
           刷新硬件状态
         </button>

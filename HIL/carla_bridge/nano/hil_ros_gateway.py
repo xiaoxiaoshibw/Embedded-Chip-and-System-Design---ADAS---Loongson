@@ -36,6 +36,7 @@ TOPIC_CAR2_V = "/car2_v"
 TOPIC_CAR2_CLASS = "/car2_class"
 TOPIC_ROAD_PSI = "/road_psi"
 TOPIC_HENG_ERROR = "/heng_error"
+TOPIC_SET_PARAM = "/adas/set_param"
 
 TOPIC_JETSON_PSI = "/jetson/psi"
 TOPIC_JETSON_DELTA = "/jetson/delta"
@@ -75,6 +76,7 @@ class HilRosGateway(Node):
         self._last_sensor_seq = -1
         self._last_sensor_ms = 0
         self._last_sensor_addr = None
+        self._last_command_seq = 0
 
         self.pub_car1_xy = self.create_publisher(Pose, TOPIC_CAR1_XY, qos_profile_sensor_data)
         self.pub_car1_psi = self.create_publisher(Float64, TOPIC_CAR1_PSI, qos_profile_sensor_data)
@@ -84,6 +86,7 @@ class HilRosGateway(Node):
         self.pub_car2_class = self.create_publisher(Int32, TOPIC_CAR2_CLASS, qos_profile_sensor_data)
         self.pub_road_psi = self.create_publisher(Float64, TOPIC_ROAD_PSI, qos_profile_sensor_data)
         self.pub_heng_error = self.create_publisher(Float64, TOPIC_HENG_ERROR, qos_profile_sensor_data)
+        self.pub_set_param = self.create_publisher(String, TOPIC_SET_PARAM, 10)
 
         self.create_subscription(Float64, TOPIC_JETSON_PSI, self._jetson_psi_cb, 10)
         self.create_subscription(Float64, TOPIC_JETSON_DELTA, self._jetson_delta_cb, 10)
@@ -227,6 +230,31 @@ class HilRosGateway(Node):
         with self._lock:
             self._last_sensor_seq = seq
             self._last_sensor_ms = _now_ms()
+        self._publish_runtime_command(frame.get("control") or {})
+
+    def _publish_runtime_command(self, control):
+        if not isinstance(control, dict):
+            return
+        params = control.get("params") or {}
+        if not isinstance(params, dict) or not params:
+            return
+        try:
+            seq = int(control.get("seq", 0) or 0)
+        except (TypeError, ValueError):
+            seq = 0
+        if seq <= 0:
+            return
+        with self._lock:
+            if seq <= self._last_command_seq:
+                return
+            self._last_command_seq = seq
+        msg = String()
+        msg.data = json.dumps({"seq": seq, "params": params}, separators=(",", ":"))
+        self.pub_set_param.publish(msg)
+        self.get_logger().info(
+            "runtime command seq=%d params=%s"
+            % (seq, ",".join(sorted(params.keys())))
+        )
 
     def _send_actuation(self):
         with self._lock:
@@ -284,7 +312,7 @@ def build_arg_parser():
     parser.add_argument("--actuation-port", type=int, default=42101)
     parser.add_argument("--tcp-port", type=int, default=42110)
     parser.add_argument("--actuation-source", choices=["jetson", "esp32"], default="jetson")
-    parser.add_argument("--status-hz", type=float, default=50.0)
+    parser.add_argument("--status-hz", type=float, default=20.0)
     return parser
 
 
