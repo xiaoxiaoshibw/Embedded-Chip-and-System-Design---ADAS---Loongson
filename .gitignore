@@ -55,6 +55,11 @@ __pycache__/
 **/logs/
 **/output/cloud_outbox/
 
+# 以下目录不在 GitHub 托管（本地保留，按需另行分发）
+统一可爱网站/
+仿真/
+IOT_TI/
+
 # 编辑器 / 工具 / 系统
 .claude/
 .codex/
