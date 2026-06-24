@@ -29,6 +29,12 @@ from control.longitudinal_policy import (
 from control.safety import apply_safety_supervisor
 
 
+# ml_result 入参哨兵：区分"未传入（内核自行调 ml_bridge）"与"显式传入 None（无 ML）"。
+# 锁步影子核传入主核已算出的 ml_result，保证两遍计算确定性一致，且影子侧不触碰
+# 真实 ml_bridge（异步线程 / ONNX 会话，不可深拷贝）。
+_UNSET = object()
+
+
 @dataclass
 class PipelineResult:
     """一个控制周期纯计算的全部产出（clamp / NaN 防护之前）。"""
@@ -39,6 +45,7 @@ class PipelineResult:
     in_curve_hold: bool
     lon_cmd: float          # 平滑 + 非AEB限幅后的最终纵向指令
     lon_raw_cmd: float      # 平滑前（含边界制动取大）的纵向指令
+    ml_result: object = None  # 本拍使用的 ML 推理结果（供锁步影子核复用，确定性）
 
 
 def update_lane_state(now, signals, memory, lane_est):
@@ -64,13 +71,16 @@ def update_lane_state(now, signals, memory, lane_est):
     return cur_lane_width
 
 
-def run_pure_pipeline(now, signals, memory, managers, takeover_rate=None):
+def run_pure_pipeline(now, signals, memory, managers, takeover_rate=None,
+                      ml_result=_UNSET):
     """执行单周期纯控制计算，返回 PipelineResult。
 
     与原 _control_loop_impl 中对应段落逐行等价：
       lane → lateral → lead → curve_hold → aeb_alert → longitudinal
       → 边界制动取大 → lon_smooth → 非AEB限幅
     takeover_rate 由调用方传入（在线=接管窗内的强制限速 / None；离线=None）。
+    ml_result 缺省（_UNSET）时由本内核自行调 ml_bridge；锁步影子核可显式传入主核
+    本拍的 ml_result 复用，保证两遍计算确定性一致且不触碰真实 ml_bridge。
     """
     # ── 0. 超车状态机（双车道）：在最早执行，依据上一拍 LeadTracker 状态决定
     # 本拍 target_lane_offset / suppress_lead_for_overtake。
@@ -109,10 +119,12 @@ def run_pure_pipeline(now, signals, memory, managers, takeover_rate=None):
     )
     update_aeb_alert(now, signals, managers, lead_ctx)
 
-    # ML 推理（可选，受 config.ML_ENABLED 控制）
-    ml_result = None
-    if managers.ml_bridge is not None:
-        ml_result = managers.ml_bridge.update(now, signals, lead_ctx)
+    # ML 推理（可选，受 config.ML_ENABLED 控制）。锁步影子核传入主核结果时跳过，
+    # 既保证确定性一致，又不触碰真实 ml_bridge（异步线程 / ONNX 会话）。
+    if ml_result is _UNSET:
+        ml_result = None
+        if managers.ml_bridge is not None:
+            ml_result = managers.ml_bridge.update(now, signals, lead_ctx)
 
     lon_ctx = compute_longitudinal_policy(
         now, signals, lead_ctx, lateral_ctx, memory, managers, in_curve_hold,
@@ -162,4 +174,5 @@ def run_pure_pipeline(now, signals, memory, managers, takeover_rate=None):
         in_curve_hold=in_curve_hold,
         lon_cmd=lon_cmd,
         lon_raw_cmd=lon_raw_cmd,
+        ml_result=ml_result,
     )

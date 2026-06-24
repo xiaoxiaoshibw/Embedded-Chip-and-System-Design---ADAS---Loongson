@@ -65,6 +65,7 @@ from control.serial_protocol import Esp32ControlFrame, build_esp32_payload
 
 
 from pipeline import run_pure_pipeline
+import copy as _copy
 from serial_link import Esp32Serial
 from telemetry import Telemetry
 
@@ -151,6 +152,27 @@ class AdasNode(Node):
             comfort_layer=self.comfort_layer,
             lead_estimator=self.lead_estimator,
         )
+
+        # ── 单板软件双核锁步（可选，默认关）：影子核每拍重算并比对控制输出。
+        # best-effort，构造失败不影响控制。详见 lockstep.py。
+        self.lockstep = None
+        self._last_lockstep_log_t = 0.0
+        if LOCKSTEP_ENABLED:
+            try:
+                import lockstep
+                self.lockstep = lockstep.LockstepChecker(
+                    checker_core=LOCKSTEP_CHECKER_CORE,
+                    delta_eps=LOCKSTEP_DELTA_EPS,
+                    lon_eps=LOCKSTEP_LON_EPS,
+                    debounce_n=LOCKSTEP_DEBOUNCE_N,
+                    inject=LOCKSTEP_INJECT,
+                    inject_delta=LOCKSTEP_INJECT_DELTA,
+                )
+                logging.info('[LOCKSTEP] 双核锁步已启用：影子核=core%d inject=%s',
+                             LOCKSTEP_CHECKER_CORE, LOCKSTEP_INJECT)
+            except Exception as exc:
+                self.lockstep = None
+                logging.warning('[LOCKSTEP] 启用失败（忽略，控制不受影响）：%r', exc)
 
         # 感知层（PerceptionLayer）始终启用：把 car2 + 可选的 car3..carN 当成
         # 一组毫米波雷达目标持续监听，每周期产出 PerceptionFrame 共享给下游
@@ -776,6 +798,49 @@ class AdasNode(Node):
                               LANE_DEFAULT_WIDTH)
         self._sync_peer_output(0.0, 0.0, SENSOR_TIMEOUT_BRAKE_CMD)
 
+    def _lockstep_snapshot(self, signals_snap, takeover_rate):
+        """锁步前状态拷贝（best-effort）。返回 (signals, memory, managers,
+        takeover_rate) 供影子核重算；未启用或拷贝失败返回 None（控制不受影响）。
+
+        - signals 浅拷贝即可：纯管线只读 signals（内部 suppress 自带 copy.copy），
+          且 VehicleSignals 含 threading.Lock 不可深拷贝。
+        - memory / managers 须深拷贝：管线就地改写它们，影子需独立副本；managers
+          排除 ml_bridge（不可深拷贝），影子改用主核 ml_result。
+        """
+        ls = self.lockstep
+        if ls is None or not ls.enabled:
+            return None
+        try:
+            import lockstep
+            return (
+                _copy.copy(signals_snap),
+                _copy.deepcopy(self.memory),
+                lockstep.snapshot_managers(self.managers),
+                takeover_rate,
+            )
+        except Exception as exc:
+            if (time.monotonic() - self._last_lockstep_log_t) >= 5.0:
+                logging.warning('[LOCKSTEP] 前状态拷贝失败（跳过本拍）：%r', exc)
+                self._last_lockstep_log_t = time.monotonic()
+            return None
+
+    def _handle_lockstep_fault(self, now):
+        """锁步失配 → 安全态：受控制动 + 安全 ROS 输出 + 安全种子，限频记 critical。"""
+        if (now - self._last_lockstep_log_t) >= 1.0:
+            logging.critical(
+                '[LOCKSTEP] 双核比较失配，控制器进入安全态（受控制动 %.1f m/s²）：%s',
+                LOCKSTEP_SAFE_BRAKE_CMD, self.lockstep.fault_reason,
+            )
+            self._last_lockstep_log_t = now
+        try:
+            payload = self._build_safe_fallback_payload(LOCKSTEP_SAFE_BRAKE_CMD)
+            self.esp32.send(payload)
+        except Exception as exc:
+            logging.critical('[LOCKSTEP] 安全帧发送失败：%s', exc)
+        self._publish_outputs(0.0, 0.0, LOCKSTEP_SAFE_BRAKE_CMD, 0.0,
+                              LANE_DEFAULT_WIDTH)
+        self._sync_peer_output(0.0, 0.0, LOCKSTEP_SAFE_BRAKE_CMD)
+
     def _record_telemetry(self, now, lateral_ctx, lon_ctx, lead_ctx,
                           in_curve_hold, lon_cmd, lon_raw_cmd,
                           psi_tx, delta_tx, speed_tx, lon_tx, cur_lane_width):
@@ -965,6 +1030,13 @@ class AdasNode(Node):
         # 更新最后活跃时刻
         self._last_control_active_t = now
 
+        # 锁步比较器已报故障（影子核与主核输出失配）→ 进入安全态（受控制动），
+        # 不再下发常规控制帧。这是软件双核锁步要演示的"算错即安全停"的行为。
+        if self.lockstep is not None and self.lockstep.fault:
+            self._handle_lockstep_fault(now)
+            self.memory.cycle_count += 1
+            return
+
         # class 话题陈旧告警：不降级控制，仅限频提醒并写遥测。
         if health.lead_cls_stale and self.memory.cycle_count % LOG_EVERY_N_CYCLES == 0:
             logging.warning(
@@ -997,6 +1069,9 @@ class AdasNode(Node):
             takeover_rate = self._takeover_lon_rate()
         else:
             takeover_rate = None
+        # 锁步：在主核改写 memory/managers **之前**深拷贝一份本拍前状态，供影子核
+        # 重算（同输入 + 同前状态 + 同 ml_result → 确定性一致，零误报）。best-effort。
+        ls_pre = self._lockstep_snapshot(signals_snap, takeover_rate)
         _res = run_pure_pipeline(
             now, signals_snap, self.memory, self.managers, takeover_rate,
         )
@@ -1007,6 +1082,13 @@ class AdasNode(Node):
         in_curve_hold = _res.in_curve_hold
         lon_cmd = _res.lon_cmd
         lon_raw_cmd = _res.lon_raw_cmd
+
+        # 锁步：把主核本拍输出 (delta / lon_cmd / AEB) 投给影子核做逐拍比较。
+        if ls_pre is not None:
+            self.lockstep.submit(
+                now, ls_pre[0], ls_pre[1], ls_pre[2], ls_pre[3], _res.ml_result,
+                lateral_ctx.delta, lon_cmd, lon_ctx.aeb_active,
+            )
 
         # NaN 防护：必须在 clamp 之前检查原始值（clamp 会把 NaN 放大成上界，
         # 例如 delta=NaN → 最大转角，且 CRC 仍合法不会被 ESP32 丢帧）。
@@ -1369,6 +1451,14 @@ def main(argv=None):
 
     rclpy.init(args=ros_args)
     node = AdasNode()
+    # 线程级钉核：把控制主循环（本线程，下面 rclpy.spin 在此执行）独占到控制核，
+    # DDS / ML / 串口 / 遥测等其余线程赶到辅助核。best-effort，失败不影响控制。
+    if RT_THREAD_PIN:
+        try:
+            import rt_affinity
+            rt_affinity.isolate_control_core(RT_CONTROL_CORE, RT_PIN_RESWEEP_S)
+        except Exception as exc:
+            logging.getLogger(__name__).warning("[RT] 线程级钉核启用失败（忽略）：%r", exc)
     try:
         rclpy.spin(node)
     except KeyboardInterrupt:

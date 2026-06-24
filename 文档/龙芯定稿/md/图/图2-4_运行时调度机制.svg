@@ -1,0 +1,93 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="760" viewBox="0 0 1200 760">
+  <defs>
+    <style>
+      .title { font: 700 30px "Microsoft YaHei", "Noto Sans CJK SC", Arial, sans-serif; fill: #111; }
+      .subtitle { font: 18px "Microsoft YaHei", "Noto Sans CJK SC", Arial, sans-serif; fill: #333; }
+      .node-title { font: 700 21px "Microsoft YaHei", "Noto Sans CJK SC", Arial, sans-serif; fill: #111; }
+      .node-text { font: 16px "Microsoft YaHei", "Noto Sans CJK SC", Arial, sans-serif; fill: #222; }
+      .small { font: 14px "Microsoft YaHei", "Noto Sans CJK SC", Arial, sans-serif; fill: #333; }
+      .box { fill: #fff; stroke: #111; stroke-width: 2; rx: 8; }
+      .core { fill: #f7f7f7; stroke: #111; stroke-width: 1.6; rx: 6; }
+      .line { fill: none; stroke: #111; stroke-width: 2; }
+      .dash { fill: none; stroke: #111; stroke-width: 1.6; stroke-dasharray: 8 6; }
+      .tag { fill: #111; }
+      .tag-text { font: 700 14px Arial, sans-serif; fill: #fff; }
+    </style>
+    <marker id="arrow" markerWidth="10" markerHeight="10" refX="9" refY="3" orient="auto" markerUnits="strokeWidth">
+      <path d="M0,0 L0,6 L9,3 z" fill="#111"/>
+    </marker>
+  </defs>
+
+  <rect x="24" y="24" width="1152" height="712" fill="#fff" stroke="#111" stroke-width="2"/>
+  <text x="600" y="72" text-anchor="middle" class="title">运行时调度机制</text>
+  <text x="600" y="104" text-anchor="middle" class="subtitle">CPUAffinity 核心绑定 · 100 Hz 控制周期 · 线程优先级配置 · 通信与控制任务隔离</text>
+
+  <rect x="70" y="150" width="270" height="500" class="box"/>
+  <text x="205" y="190" text-anchor="middle" class="node-title">CPUAffinity 核心绑定</text>
+  <text x="95" y="226" class="node-text">systemd / taskset 限定进程核集</text>
+  <text x="95" y="254" class="node-text">rt_affinity 二次整理线程亲和性</text>
+  <line x1="205" y1="285" x2="205" y2="604" class="line"/>
+
+  <rect x="105" y="305" width="200" height="58" class="core"/>
+  <rect x="115" y="318" width="42" height="24" class="tag"/>
+  <text x="136" y="335" text-anchor="middle" class="tag-text">C0</text>
+  <text x="168" y="329" class="node-text">主控制循环</text>
+  <text x="168" y="350" class="small">rclpy.spin / 100 Hz</text>
+
+  <rect x="105" y="385" width="200" height="58" class="core"/>
+  <rect x="115" y="398" width="42" height="24" class="tag"/>
+  <text x="136" y="415" text-anchor="middle" class="tag-text">C1</text>
+  <text x="168" y="409" class="node-text">通信与 I/O</text>
+  <text x="168" y="430" class="small">DDS / UART / heartbeat</text>
+
+  <rect x="105" y="465" width="200" height="58" class="core"/>
+  <rect x="115" y="478" width="42" height="24" class="tag"/>
+  <text x="136" y="495" text-anchor="middle" class="tag-text">C2</text>
+  <text x="168" y="489" class="node-text">Checker 影子核</text>
+  <text x="168" y="510" class="small">lockstep compare</text>
+
+  <rect x="105" y="545" width="200" height="58" class="core"/>
+  <rect x="115" y="558" width="42" height="24" class="tag"/>
+  <text x="136" y="575" text-anchor="middle" class="tag-text">C3</text>
+  <text x="168" y="569" class="node-text">后台辅助任务</text>
+  <text x="168" y="590" class="small">ML / telemetry / logging</text>
+
+  <rect x="430" y="150" width="340" height="500" class="box"/>
+  <text x="600" y="190" text-anchor="middle" class="node-title">100 Hz 控制周期</text>
+  <text x="600" y="224" text-anchor="middle" class="subtitle">10 ms 固定节拍，输入快照驱动纯控制内核</text>
+
+  <rect x="480" y="270" width="240" height="56" class="core"/>
+  <text x="600" y="304" text-anchor="middle" class="node-text">1. 采集 ROS / 串口输入快照</text>
+  <rect x="480" y="365" width="240" height="56" class="core"/>
+  <text x="600" y="399" text-anchor="middle" class="node-text">2. run_pure_pipeline 计算</text>
+  <rect x="480" y="460" width="240" height="56" class="core"/>
+  <text x="600" y="494" text-anchor="middle" class="node-text">3. 安全限幅与 NaN 防护</text>
+  <rect x="480" y="555" width="240" height="56" class="core"/>
+  <text x="600" y="589" text-anchor="middle" class="node-text">4. 下发 ESP32 控制帧</text>
+  <path d="M600 326 L600 360" class="line" marker-end="url(#arrow)"/>
+  <path d="M600 421 L600 455" class="line" marker-end="url(#arrow)"/>
+  <path d="M600 516 L600 550" class="line" marker-end="url(#arrow)"/>
+
+  <rect x="860" y="150" width="270" height="500" class="box"/>
+  <text x="995" y="190" text-anchor="middle" class="node-title">线程优先级配置</text>
+  <text x="885" y="230" class="node-text">控制线程固定在核心 0</text>
+  <text x="885" y="260" class="node-text">辅助线程迁移到非控制核</text>
+  <text x="885" y="290" class="node-text">周期性重扫新建线程</text>
+  <text x="885" y="320" class="node-text">Checker 每拍自重钉核心 2</text>
+
+  <line x1="860" y1="365" x2="1130" y2="365" class="line"/>
+  <text x="995" y="405" text-anchor="middle" class="node-title">通信与控制任务隔离</text>
+  <text x="885" y="445" class="node-text">控制链路：输入快照 → 计算 → 控制帧</text>
+  <text x="885" y="475" class="node-text">通信链路：DDS / UDP / UART 独立线程</text>
+  <text x="885" y="505" class="node-text">观测链路：日志 / 遥测不阻塞控制拍</text>
+  <text x="885" y="535" class="node-text">失配链路：Lockstep 触发受控制动</text>
+
+  <path d="M340 400 L430 400" class="line" marker-end="url(#arrow)"/>
+  <path d="M770 400 L860 400" class="line" marker-end="url(#arrow)"/>
+  <path d="M705 393 C785 330 820 305 860 285" class="dash" marker-end="url(#arrow)"/>
+  <text x="770" y="326" class="small">辅助线程迁移</text>
+  <path d="M705 489 C790 535 820 540 860 535" class="dash" marker-end="url(#arrow)"/>
+  <text x="770" y="552" class="small">锁步失配安全态</text>
+
+  <text x="600" y="700" text-anchor="middle" class="small">调度目标：控制主循环独占低抖动核心，通信、推理、遥测与锁步检查在辅助核心执行，避免阻塞 10 ms 控制预算。</text>
+</svg>
