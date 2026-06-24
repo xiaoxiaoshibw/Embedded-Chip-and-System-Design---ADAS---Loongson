@@ -223,6 +223,28 @@ def _resolve_loop_hz() -> int:
 
 LOOP_HZ = _resolve_loop_hz()               # 主控循环频率 (Hz)，可经环境变量覆盖
 
+# ── 实时控制核隔离（线程级 CPU 亲和性，见 rt_affinity.py）──
+# 把 100Hz 控制主循环独占到 RT_CONTROL_CORE，进程内其余线程（DDS / ML / 串口 / 遥测 /
+# 日志 / 心跳）赶到剩余允许核——控制核保持"干净"，压低循环尾延迟抖动。仅在进程允许集含
+# 控制核且核数 ≥ 2 时生效（Nano 上经 systemd CPUAffinity / taskset 钉到 0,1 后 = 控制
+# 核 0 + 辅助核 1）；开发机 / SIL / offline 工具不调用，天然 no-op。环境变量可覆盖。
+RT_THREAD_PIN = os.environ.get('RT_THREAD_PIN', '1') not in ('0', 'false', 'False')
+RT_CONTROL_CORE = int(os.environ.get('RT_CONTROL_CORE', '0'))
+RT_PIN_RESWEEP_S = 3.0                      # 守护线程重扫间隔 (s)，覆盖后启动的线程
+
+# ── 单板软件双核锁步（lockstep，见 lockstep.py）──
+# 主核(core0)与影子/Checker 核(LOCKSTEP_CHECKER_CORE)对同一拍输入各算一遍控制管线，
+# 逐拍比较 delta/lon/AEB，连续 LOCKSTEP_DEBOUNCE_N 拍失配即报故障进安全态。默认关闭
+# （开启会在控制核外多算一遍 + 每拍深拷贝前状态，仅用于演示/验证）。环境变量可覆盖。
+LOCKSTEP_ENABLED = os.environ.get('LOCKSTEP_ENABLED', '0') in ('1', 'true', 'True')
+LOCKSTEP_CHECKER_CORE = int(os.environ.get('LOCKSTEP_CHECKER_CORE', '2'))
+LOCKSTEP_DELTA_EPS = 1e-9                   # delta 失配阈值 (rad)；同 CPU 同码应 bit 一致
+LOCKSTEP_LON_EPS = 1e-9                     # lon_cmd 失配阈值 (m/s²)
+LOCKSTEP_DEBOUNCE_N = 2                     # 连续失配多少拍才报故障（滤抖）
+LOCKSTEP_INJECT = os.environ.get('LOCKSTEP_INJECT', '0') in ('1', 'true', 'True')
+LOCKSTEP_INJECT_DELTA = 0.05               # 注入故障时影子 delta 偏移 (rad)，演示用
+LOCKSTEP_SAFE_BRAKE_CMD = 2.5              # 失配安全态受控制动量 (m/s²，正=制动)
+
 # ── 心跳参数 ──
 # 接管时序预算：阈值 + 接收轮询(≤5ms, socket timeout) + 备机首拍解算发帧(≤10ms)
 # ≈ 备机就绪 ~50ms，必须 < ESP32 主控失活仲裁阈值 JETSON_TIMEOUT_MS（main.c / bridge_config
