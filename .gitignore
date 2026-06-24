@@ -5,8 +5,13 @@
 # CARLA 0.9.16 预编译二进制分发（~18GB，切勿上传）
 CALRA/
 
-# lx/ 是独立 Git 仓库（SOC 控制栈、MCU 固件、ML 模型），根仓库不跟踪
-lx/
+# lx/ 是独立 Git 仓库；本仓库只纳入 Nano 主控 SOC 控制栈与 MCU 固件源码，其余（ml/图片/文档/嵌套.git）不跟踪
+lx/*
+!lx/SOCCode/
+!lx/MCUcode/
+# SOCCode 的遥测/绘图输出不上传（仅留源码）
+lx/SOCCode/csv_output/
+lx/SOCCode/tests/test_report.png
 
 # 演示打包 zip
 *.zip

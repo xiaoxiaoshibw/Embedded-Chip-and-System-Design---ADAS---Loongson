@@ -1,0 +1,24 @@
+name: high_speed_curve_hard_brake
+duration_s: 20.0
+road:
+  curvature: 0.006
+ego:
+  v0: 22.0
+  lane_offset0: 0.15
+lead:
+  present: true
+  gap0: 45.0
+  v0: 18.0
+  cls: 1
+  accel_profile:
+    - {t: 0.0, a: 0.0}
+    - {t: 4.0, a: -4.5}
+    - {t: 7.0, a: 0.0}
+  lateral_profile:
+    - {t: 0.0, y: 0.0}
+expect:
+  collision: false
+  min_gap_min: 1.5
+  min_ttc_min: 0.5
+  lat_cte_rms_max: 1.2
+  jerk_rms_max: 18.0

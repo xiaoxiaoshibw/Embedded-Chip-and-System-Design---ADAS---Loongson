@@ -1,0 +1,31 @@
+name: complex_curve_cut_in_brake_dropout
+duration_s: 24.0
+road:
+  curvature: 0.010
+ego:
+  v0: 12.0
+  lane_offset0: 0.2
+lead:
+  present: true
+  gap0: 32.0
+  v0: 10.0
+  cls: 1
+  accel_profile:
+    - {t: 0.0, a: 0.0}
+    - {t: 5.0, a: -3.5}
+    - {t: 7.0, a: 0.0}
+    - {t: 12.0, a: -2.0}
+    - {t: 15.0, a: 0.0}
+  lateral_profile:
+    - {t: 0.0, y: 2.8}
+    - {t: 3.0, y: 2.8}
+    - {t: 6.0, y: 0.0}
+    - {t: 24.0, y: 0.0}
+  dropout:
+    - {t_start: 8.0, t_end: 9.5}
+expect:
+  collision: false
+  min_gap_min: 4.0
+  min_ttc_min: 1.0
+  lat_cte_rms_max: 1.2
+  jerk_rms_max: 16.0

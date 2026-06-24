@@ -1,0 +1,21 @@
+# Jetson Nano 部署依赖
+#
+# 安装：python3 -m pip install -r requirements.txt
+#
+# 说明：
+#   - rclpy / std_msgs / geometry_msgs 来自 ROS2 安装（source setup.bash 提供），
+#     不通过 pip 安装。
+#   - dataclasses 仅在 Python 3.6 上需要（标准库 3.7+ 已内置）。
+#     JetPack 4.x 自带 Python 3.6，必须装这个 backport，否则 config.py
+#     等模块 import dataclasses 会直接失败。
+
+pyserial>=3.4,<4.0
+
+# Python 3.6 兼容（3.7+ 自动跳过，不会安装）
+dataclasses>=0.8; python_version < "3.7"
+
+# 仅离线分析用（plot_telemetry.py / replay.py / 评测框架），
+# 控制节点 ADAS.py 运行不需要。Jetson 上线部署可不装。
+numpy>=1.19,<2.0
+matplotlib>=3.3,<4.0
+PyYAML>=5.4,<7.0
