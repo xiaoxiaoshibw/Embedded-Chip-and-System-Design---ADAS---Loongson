@@ -12,6 +12,7 @@ python3 adas.py --role backup
 """
 
 import math
+import json
 import logging
 import os
 import time
@@ -1244,6 +1245,16 @@ class AdasNode(Node):
         'ACC_KV': ('acc_kv', 'acc_kv'),
         'ACC_KA': ('acc_ka', 'acc_ka'),
     }
+    _RUNTIME_PARAM_ALIASES = {
+        'ego_speed': ('driver_set_speed', 1.0 / 3.6, 0.0, 200.0 / 3.6),
+        'target_speed_kmh': ('driver_set_speed', 1.0 / 3.6, 0.0, 200.0 / 3.6),
+        'DRIVER_SET_SPEED': ('driver_set_speed', 1.0, 0.0, 80.0),
+        'driver_set_speed': ('driver_set_speed', 1.0, 0.0, 80.0),
+        'system_max_cruise': ('system_max_cruise', 1.0, 0.0, 80.0),
+        'SYSTEM_MAX_CRUISE': ('system_max_cruise', 1.0, 0.0, 80.0),
+        'road_limit_speed': ('road_limit_speed', 1.0, 0.0, 80.0),
+        'ROAD_LIMIT_SPEED': ('road_limit_speed', 1.0, 0.0, 80.0),
+    }
 
     def _set_param_callback(self, msg):
         """处理 /adas/set_param 的 "NAME=VALUE"：仅白名单增益可热更新。
@@ -1256,12 +1267,34 @@ class AdasNode(Node):
             raw = str(msg.data).strip()
         except Exception:
             return
+        if raw.startswith('{'):
+            try:
+                payload = json.loads(raw)
+            except Exception as exc:
+                logging.warning('[SET_PARAM] bad json %r: %s', raw, exc)
+                return
+            seq = int(payload.get('seq', self.memory.runtime_command_seq + 1) or 0)
+            params = payload.get('params') or {}
+            if seq and seq <= self.memory.runtime_command_seq:
+                return
+            applied = []
+            for key, value in params.items():
+                if self._apply_runtime_param(str(key), value):
+                    applied.append(str(key))
+            if applied and seq:
+                self.memory.runtime_command_seq = seq
+                logging.info('[SET_PARAM] command seq=%d applied: %s',
+                             seq, ','.join(applied))
+            return
         if '=' not in raw:
             logging.warning('[SET_PARAM] bad format %r (need NAME=VALUE)', raw)
             return
         name, _, val_s = raw.partition('=')
         name = name.strip()
         val_s = val_s.strip()
+        if self._apply_runtime_param(name, val_s):
+            logging.info('[SET_PARAM] %s -> %s applied (runtime)', name, val_s)
+            return
         mapping = self._HOT_PARAM_MAP.get(name)
         if mapping is None:
             logging.warning('[SET_PARAM] reject non-whitelisted param %r '
@@ -1286,6 +1319,32 @@ class AdasNode(Node):
             name, value, gain_attr,
             '' if lon_kw is None else ' + lon_ctrl',
         )
+
+    def _apply_runtime_param(self, name, value) -> bool:
+        mapping = self._RUNTIME_PARAM_ALIASES.get(name)
+        if mapping is None:
+            return False
+        attr, scale, lo, hi = mapping
+        try:
+            v = float(value) * float(scale)
+        except (TypeError, ValueError):
+            logging.warning('[SET_PARAM] %s: non-numeric runtime value %r',
+                            name, value)
+            return True
+        if not is_finite(v):
+            logging.warning('[SET_PARAM] %s: non-finite runtime value %r',
+                            name, value)
+            return True
+        v = clamp(v, lo, hi)
+        setattr(self.memory, attr, v)
+        if attr == 'driver_set_speed':
+            # Keep these ceilings at least as high as the requested speed unless
+            # the upper computer explicitly lowers them later.
+            self.memory.system_max_cruise = max(self.memory.system_max_cruise, v)
+            self.memory.road_limit_speed = max(self.memory.road_limit_speed, v)
+        logging.info('[SET_PARAM] %s -> %.3f m/s applied to memory.%s',
+                     name, v, attr)
+        return True
 
     # ----------------------------------------------------------
     def destroy_node(self):

@@ -31,6 +31,9 @@ class NanoLink:
         self._latest_rx_t = 0.0
         self._running = True
         self._send_lock = threading.Lock()
+        self._command_lock = threading.Lock()
+        self._command_seq = 0
+        self._runtime_params: Dict[str, Any] = {}
         try:
             self._sock = socket.create_connection(
                 (gateway_host, tcp_port), timeout=connect_timeout_s)
@@ -69,12 +72,31 @@ class NanoLink:
                     self._latest_rx_t = time.monotonic()
 
     def send_sensor(self, payload: Dict[str, Any]) -> None:
+        with self._command_lock:
+            if self._runtime_params:
+                payload = dict(payload)
+                payload["control"] = {
+                    "seq": self._command_seq,
+                    "params": dict(self._runtime_params),
+                }
         data = (json.dumps(payload, separators=(",", ":")) + "\n").encode("utf-8")
         with self._send_lock:
             try:
                 self._sock.sendall(data)
             except OSError:
                 pass
+
+    def update_runtime_params(self, params: Dict[str, Any]) -> int:
+        clean: Dict[str, Any] = {}
+        for key in ("ego_speed", "target_speed_kmh", "system_max_cruise", "road_limit_speed"):
+            if key in params:
+                clean[key] = params[key]
+        if not clean:
+            return self._command_seq
+        with self._command_lock:
+            self._runtime_params.update(clean)
+            self._command_seq += 1
+            return self._command_seq
 
     def get_control(self) -> Dict[str, Any]:
         with self._lock:

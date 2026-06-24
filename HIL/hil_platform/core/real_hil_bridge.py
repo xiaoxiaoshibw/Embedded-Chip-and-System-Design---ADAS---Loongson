@@ -73,6 +73,12 @@ class RealHilBridge(HilBridge):
             if self.nano_link is not None:
                 self.nano_link.close()
             self.nano_link = NanoLink(self.gateway_host, self.gateway_port)
+            self.set_runtime_params(self.params)
+
+    def set_runtime_params(self, params: Dict[str, Any]) -> None:
+        self.params.update(params)
+        if self.control_source == "nano" and self.nano_link is not None:
+            self.nano_link.update_runtime_params(self.params)
 
     # ──────────────────────────────────────────────────────────
     def step(self, dt: float, sim_t: float,

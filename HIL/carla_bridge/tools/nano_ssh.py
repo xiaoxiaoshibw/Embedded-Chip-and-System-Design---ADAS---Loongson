@@ -5,6 +5,7 @@ Usage:
     python nano_ssh.py A "command"      # run command on backup nano A over LAN
     python nano_ssh.py B "command"      # run command on primary nano B over LAN
     python nano_ssh.py both "command"   # run on both LAN targets
+    python nano_ssh.py both_zt "cmd"    # run on both ZeroTier targets
     python nano_ssh.py A_TUNNEL "cmd"   # old SSH jump/NAT endpoint
 """
 import sys
@@ -21,6 +22,8 @@ HOST = "10.18.52.130"
 NANOS = {
     "A": {"host": "192.168.3.124", "port": 22, "user": "jetson", "pw": "jetson"},
     "B": {"host": "192.168.3.125", "port": 22, "user": "jetson", "pw": "yahboom"},
+    "A_ZT": {"host": "10.218.44.155", "port": 22, "user": "jetson", "pw": "jetson"},
+    "B_ZT": {"host": "10.218.44.10", "port": 22, "user": "jetson", "pw": "yahboom"},
     "A_TUNNEL": {"host": "10.18.52.130", "port": 52124, "user": "jetson", "pw": "jetson"},
     "B_TUNNEL": {"host": "10.18.52.130", "port": 52125, "user": "jetson", "pw": "yahboom"},
     "C_TUNNEL": {"host": "10.18.52.130", "port": 52123, "user": "jetson", "pw": "jetson"},
@@ -52,7 +55,12 @@ def run(key, cmd, get_pty=False):
 def main():
     target = sys.argv[1]
     cmd = sys.argv[2]
-    keys = ["A", "B"] if target == "both" else [target]
+    if target == "both":
+        keys = ["A", "B"]
+    elif target == "both_zt":
+        keys = ["A_ZT", "B_ZT"]
+    else:
+        keys = [target]
     for k in keys:
         print("=" * 30, "NANO", k, "=" * 30)
         try:

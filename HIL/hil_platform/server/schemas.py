@@ -57,6 +57,12 @@ class HardwareGatewayRequest(BaseModel):
     source: str = Field(default="esp32", description="esp32 / jetson")
 
 
+class HardwarePrepareRequest(BaseModel):
+    source: str = Field(default="esp32", description="esp32 / jetson")
+    deploy: bool = Field(default=True, description="whether to upload carla_bridge/nano before starting")
+    carla: bool = Field(default=True, description="whether to start CARLA before starting gateway")
+
+
 class ActionResponse(BaseModel):
     ok: bool = True
     status: Dict[str, Any]

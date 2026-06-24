@@ -21,7 +21,7 @@ carla_bridge/
 │   └── scenarios.py          场景库：lka/acc/aeb/overtake/failover/free（与 仿真/ 同源）
 ├── nano/      # 部署到 Nano 的"网关 + 进程管理"单元（deploy_gateway 扁平上传到 /home/jetson/adas/hil）
 │   ├── hil_ros_gateway.py    ROS2 Gateway：TCP 感知帧→ROS2 话题；订阅 /jetson|/esp32 执行量→TCP 回执
-│   ├── start_hil_adas.py     停 systemd、杀旧 ADAS、用隔离 domain 重启 ADAS.py
+│   ├── start_hil_adas.py     停 systemd、杀旧 ADAS、用隔离 domain 把 ADAS 注册为 **systemd transient 单元** adas-hil-<role>.service（Restart=always 自愈，如真实部署）
 │   ├── restart_adas.py       SIGINT→SIGTERM→SIGKILL 优雅重启（走 deploy/nano/adas-run.sh）
 │   └── stop_gateway.py       杀 hil_ros_gateway.py
 ├── launch/    # Windows 编排脚本（双击 .bat 或命令行）
@@ -122,6 +122,7 @@ python tools\upload.py B <本地目录> <远程目录>   # 递归 sftp 上传
 - **`deploy_gateway` 只上传 `nano/`**：扁平铺到 Nano `/home/jetson/adas/hil`，所以 Nano 上仍是 `hil_ros_gateway.py` 等平铺文件（与 PC 侧子目录无关）。
 - **`start_gateway_lan.ps1` 是前台 SSH**：关窗口或 Ctrl+C 会停掉 Nano 上的 gateway。
 - **场景 `timeline`（故障注入时间线）在 HIL 路径中不生效**：gateway 没有故障注入接线，主备接管要靠**真的在 Nano 上杀/暂停 `ADAS.py`** 来演示；`lead` 前车脚本与 `spawn_index` 生效。
+- **HIL ADAS 现在受 systemd 监管自愈（`adas-hil-<role>.service`, `Restart=always`）**：被 `kill` 后约 2s 自动拉起（与生产 `adas-node.service` 一致），不再是裸 `nohup` 孤儿。推论：① 演示**持续**主备接管须用 `kill -STOP`（冻结，心跳静默触发接管，systemd 不重启）+ `kill -CONT` 恢复，或 `systemctl stop adas-hil-<role>`——单纯 `kill` 只会得到约 2s 的瞬态接管后主控自愈；② 收尾**必须** `restore_system_adas_lan.ps1`（先 `systemctl stop adas-hil-*` 再恢复 `adas-node`），否则 `Restart=always` 会把 pkill 掉的 ADAS 立刻拉回、根本停不掉；③ 日志走 shell 内 `>> /tmp/adas_hil_<role>.log 2>&1`（不用 systemd `StandardOutput=append:`——`User=` 下日志已存在会 EACCES 209/STDOUT）。
 - **坐标符号约定（`pc/carla_link.py` / `pc/bridge_config.py`）**：CARLA 左手系下自洽——`yaw(rad)` 直接作 `psi`，`lane_offset` 右正，`steer` 与 `delta` 同号，全程不翻转坐标系。推论：超车向【右】借道，出生点须保证右侧有车道。
 - **务必先停旧 `/perception_sim`**（domain 42）：否则它会和 CARLA 桥抢发 `/car1_*`。
 - **滚动升级注意**：心跳/接管相关改动须同时重启主备（见根 `CLAUDE.md` 心跳约束）。

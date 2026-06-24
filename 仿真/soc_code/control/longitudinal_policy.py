@@ -117,6 +117,7 @@ def limit_non_aeb_lon(lon_cmd: float,
                       lon_ctx: LongitudinalContext,
                       acc_has_lead: bool,
                       ego_v: float,
+                      memory: Optional[ControlMemory] = None,
                       boundary_brake_active: bool = False,
                       raw_lead_v_proj: Optional[float] = None) -> float:
     """Apply final non-AEB longitudinal output limits.
@@ -140,7 +141,12 @@ def limit_non_aeb_lon(lon_cmd: float,
             and ego_v <= ((raw_lead_v_proj if raw_lead_v_proj is not None else lon_ctx.lead_v_proj) + 0.8)
         ):
             lon_cmd = min(lon_cmd, 0.2)
-    elif ego_v >= (min(DRIVER_SET_SPEED, SYSTEM_MAX_CRUISE, ROAD_LIMIT_SPEED) - 0.2):
+    else:
+        driver_set_speed = getattr(memory, "driver_set_speed", DRIVER_SET_SPEED)
+        system_max_cruise = getattr(memory, "system_max_cruise", SYSTEM_MAX_CRUISE)
+        road_limit_speed = getattr(memory, "road_limit_speed", ROAD_LIMIT_SPEED)
+        if ego_v < (min(driver_set_speed, system_max_cruise, road_limit_speed) - 0.2):
+            return lon_cmd
         lon_cmd = max(lon_cmd, 0.0)
     return lon_cmd
 
@@ -384,6 +390,7 @@ def compute_longitudinal_policy(now: float,
                 ),
                 acc_has_lead=True,
                 ego_v=signals.ego_v,
+                memory=memory,
                 raw_lead_v_proj=raw_lead_v_proj,
             )
 
@@ -423,7 +430,7 @@ def compute_longitudinal_policy(now: float,
         cruise_drive_guard = acc_lead_loss_guard or lateral_ctx.in_curve or lead_ctx.recent_curve_exit
 
         # 目标速度取驾驶设定速度、系统上限和道路限速的较小值
-        v_tgt = min(DRIVER_SET_SPEED, SYSTEM_MAX_CRUISE, ROAD_LIMIT_SPEED)
+        v_tgt = min(memory.driver_set_speed, memory.system_max_cruise, memory.road_limit_speed)
         # 弯道时根据侧向加速度限制目标速度
         v_curve_max = math.sqrt(CORNERING_MAX_LAT_ACCEL / max(lateral_ctx.curv_guard, 1e-6))
         v_tgt = min(v_tgt, v_curve_max)
