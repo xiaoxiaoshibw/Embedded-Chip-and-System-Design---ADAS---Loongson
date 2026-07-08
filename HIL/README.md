@@ -20,7 +20,7 @@ HIL/
 │   ├── launch/         Windows 一键 .bat + 7 步编排 .ps1
 │   ├── tools/          nano_ssh / upload（SSH 执行 + sftp 上传）
 │   ├── logs/           桥运行 CSV
-│   └── CLAUDE.md / README.md  ← 桥详细说明、网络与节点
+│   └── README.md  ← 桥详细说明、网络与节点
 │
 └── _legacy/          ← 归档：被取代的旧原型（HIL闭环/），可删
 ```
@@ -33,7 +33,7 @@ HIL/
 | **真实 CARLA + 内置控制** | `HIL_MOCK=0`, `HIL_CONTROL=internal` | PC 上内置 Controller | 有 CARLA、无 Nano 时的闭环 |
 | **真实 Nano（完整 HIL）** | `HIL_MOCK=0`, `HIL_CONTROL=nano` | **两台 Jetson Nano 真实 ADAS** | 比赛现场：Web 控两台 Nano，CARLA 做世界/感知/闭环 |
 
-> 数据面走 **ZeroTier**（PC `10.218.44.190` ↔ primary Nano `10.218.44.10:42110`）；NAT 跳板 `10.18.52.130` 只转发 SSH。详见 `carla_bridge/CLAUDE.md` 网络章节。
+> 数据面走 **ZeroTier**（PC `10.218.44.190` ↔ primary Nano `10.218.44.10:42110`）；NAT 跳板 `10.18.52.130` 只转发 SSH。详见 `carla_bridge/README.md` 网络章节。
 
 ## 快速开始
 
@@ -66,4 +66,4 @@ python -m uvicorn server.api_server:app --port 8000
 ## 详细文档
 
 - 平台（WebUI/后端/CLI/API）：[`hil_platform/README.md`](hil_platform/README.md)
-- 桥（CARLA/Nano/网络/一键启动）：[`carla_bridge/README.md`](carla_bridge/README.md)、[`carla_bridge/CLAUDE.md`](carla_bridge/CLAUDE.md)
+- 桥（CARLA/Nano/网络/一键启动）：[`carla_bridge/README.md`](carla_bridge/README.md)

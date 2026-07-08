@@ -72,9 +72,16 @@ CLAUDE.md
 .claude/
 .codex/
 .agents/
+.sisyphus/
+**/.sisyphus/
 CLAUDE_CODEX_MEMORY/
+AGENTS.md
 .omo/
 .idea/
 .vscode/
 .DS_Store
 Thumbs.db
+
+# AI 辅助分析类文档（评审展示不纳入版本管理）
+lx/SOCCode/危险与风险分析报告.md
+lx/SOCCode/架构分析报告.md
