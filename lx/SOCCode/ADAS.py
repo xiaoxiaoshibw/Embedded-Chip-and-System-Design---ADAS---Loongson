@@ -11,6 +11,7 @@ python3 adas.py --role backup
 主循环频率 100 Hz。
 """
 
+import json
 import math
 import logging
 import os
@@ -56,6 +57,7 @@ from longitudinal import (
 import runtime
 from control.aeb_alert import AebAlertManager
 from control.context import ControlManagers, ControlMemory, VehicleSignals
+from control.aeb_path_check import AebPathChecker, obstacles_from_frame
 from control.ml_bridge import MlBridge
 from control.curve_hold import CurveHoldManager
 from control.health import evaluate_control_health
@@ -66,12 +68,24 @@ from control.model_lateral import make_lateral_model_controller
 from control.mpc_longitudinal import make_lon_controller
 from control.overtake import OvertakeManager
 from control.perception import CAR2_ID, PerceptionLayer
-from control.serial_protocol import Esp32ControlFrame, build_esp32_payload
+from control.serial_protocol import Esp32ControlFrame
+from control.command_gate import (
+    CommandGate,
+    GATE_NORMAL,
+    GATE_CTRL_ERROR,
+    GATE_SENSOR_STALE,
+    GATE_LOCKSTEP_FAULT,
+    SEVERITY_NORMAL,
+    SEVERITY_WARN,
+    SEVERITY_CRITICAL,
+)
+from control.vehicle_adapter import make_vehicle_adapter
+from control.config_check import log_config_issues
+from control.telemetry_reporter import TelemetryReporter
 
 
 from pipeline import run_pure_pipeline
 import copy as _copy
-from serial_link import Esp32Serial
 from telemetry import Telemetry
 
 
@@ -85,6 +99,8 @@ class AdasNode(Node):
         setup_logging()
         logging.info('=== ADAS node started role=%s IS_PRIMARY=%s dt=%.3fs ===',
                      runtime.NANO_ROLE, runtime.IS_PRIMARY, 1.0 / LOOP_HZ)
+        # 启动期安全配置自检（对标 Apollo/Autoware；只读校验 + 记日志，不改控制行为）
+        log_config_issues()
 
         # 对外发布 Jetson 侧最终控制量，以及 ESP32 回读状态，便于联调与监控。
         self.pub_psi = self.create_publisher(Float64, TOPIC_JETSON_PSI, 1)
@@ -103,6 +119,8 @@ class AdasNode(Node):
         self.pub_failover = self.create_publisher(
             Bool, TOPIC_JETSON_FAILOVER_AVAILABLE, 10,
         )
+        # 结构化诊断：命令门控 reason（String），变化时发布，供监控/HIL 平台订阅。
+        self.pub_gate_reason = self.create_publisher(String, '/jetson/gate_reason', 10)
 
         # 订阅自车、前车、道路和车道线相关观测，统一写入 self.signals。
         # 高频感知话题改用 sensor_data QoS（BEST_EFFORT + KEEP_LAST 1），
@@ -118,10 +136,13 @@ class AdasNode(Node):
         # 运行时增益热更新（低频指令，用默认可靠 QoS）。
         self.create_subscription(String, TOPIC_SET_PARAM, self._set_param_callback, 10)
 
-        # 外设/算法管理器初始化：串口链路、主备心跳、车道宽估计、目标车跟踪等。
-        self.esp32    = Esp32Serial()
+        # 外设/算法管理器初始化：车辆接口（VehicleAdapter，封装 ESP32 串口/组帧/
+        # 回传/健康，对标 Apollo VehicleController）、主备心跳、车道宽估计、目标车跟踪等。
+        self.vehicle  = make_vehicle_adapter()
         self.peer_hb  = PeerHeartbeat()
         self.telemetry = Telemetry(runtime.NANO_ROLE)
+        # 遥测行组织器（★6：从节点抽出，openpilot 式 publish/diagnostics 分离）
+        self.telemetry_reporter = TelemetryReporter(self.telemetry)
         self.lane_est = LaneWidthEstimator(LOOP_HZ)
         self.lead_tracker = LeadTracker()
         self.aeb_alert = AebAlertManager()
@@ -144,6 +165,8 @@ class AdasNode(Node):
          self.memory.lane_hard_margin) = lane_margins_from_width(LANE_DEFAULT_WIDTH)
         # ML 推理桥接（可选，受 config.ML_ENABLED 控制）
         self.ml_bridge = MlBridge() if ML_ENABLED else None
+        # AEB 预测路径碰撞检查器（可选，默认关；见 config.AEB_PATH_CHECK_ENABLED）
+        self.aeb_path = AebPathChecker() if AEB_PATH_CHECK_ENABLED else None
         self.managers = ControlManagers(
             lane_est=self.lane_est,
             lead_tracker=self.lead_tracker,
@@ -156,6 +179,7 @@ class AdasNode(Node):
             lateral_model=self.lateral_model,
             comfort_layer=self.comfort_layer,
             lead_estimator=self.lead_estimator,
+            aeb_path=self.aeb_path,
         )
 
         # ── 单板软件双核锁步（可选，默认关）：通过 lockstepd 独立进程
@@ -254,6 +278,14 @@ class AdasNode(Node):
         # 1s 内重复事件降为 WARNING，避免 flapping 时告警刷屏
         self._critical_log = RateLimitedCritical(window_s=1.0)
 
+        # ── 统一命令门控（CommandGate）：ESP32 下发前唯一安全裁决点。
+        # 收敛原先分散的 NaN 守护 / 串口范围 clamp / 安全回退帧构造，并为每帧
+        # 产出 reason/severity（结构化诊断）。本身无状态，不改任何控制数值。
+        self.gate = CommandGate()
+        self._last_gate_reason = GATE_NORMAL
+        self._last_gate_severity = SEVERITY_NORMAL
+        self._last_pub_gate_reason = None  # 诊断话题去重：仅 reason 变化时发布
+
         # 以固定 dt 进入控制循环，当前设计目标为 100 Hz。
         self.timer = self.create_timer(self.memory.dt, self.control_loop)
 
@@ -286,7 +318,7 @@ class AdasNode(Node):
         pub.publish(m)
 
     def _publish_outputs(self, psi_tx: float, delta_tx: float, lon_tx: float,
-                         cur_off: float, cur_lane_width: float):
+                         cur_off: float, cur_lane_width: float, fb=None):
         # ROS 话题发布与控制闭环无关，因此这里吞掉异常，避免影响主循环实时性。
         try:
             for pub, val in (
@@ -296,10 +328,12 @@ class AdasNode(Node):
             ):
                 self._publish_float64(pub, val)
             self._publish_float64(self.pub_offset, cur_off)
+            if fb is None:
+                fb = self.vehicle.read_feedback()
             for pub, val in (
-                (self.pub_esp_psi, self.esp32.esp_psi),
-                (self.pub_esp_delta, self.esp32.esp_delta),
-                (self.pub_esp_brake, self.esp32.esp_brake),
+                (self.pub_esp_psi, fb.psi),
+                (self.pub_esp_delta, fb.delta),
+                (self.pub_esp_brake, fb.brake),
             ):
                 self._publish_float64(pub, val)
             self._publish_float64(self.pub_lane_w, cur_lane_width)
@@ -307,6 +341,12 @@ class AdasNode(Node):
             cls_msg = Int32()
             cls_msg.data = int(self.signals.lead_cls)
             self.pub_lead_cls.publish(cls_msg)
+            # 命令门控 reason 变化时发布（避免 100Hz 重复发同一字符串）
+            if self._last_gate_reason != self._last_pub_gate_reason:
+                rmsg = String()
+                rmsg.data = self._last_gate_reason
+                self.pub_gate_reason.publish(rmsg)
+                self._last_pub_gate_reason = self._last_gate_reason
         except Exception as e:
             # DDS 拓扑断开会让 publish 持续抛错，限频到每秒一次并带计数
             self._publish_err_count += 1
@@ -319,12 +359,13 @@ class AdasNode(Node):
                 self._publish_err_last_log_t = now
                 self._publish_err_count = 0
 
-    def _build_esp32_payload(self, ttc_tx: float, dist_tx: float,
-                             psi_tx: float, delta_tx: float, speed_tx: float,
-                             lon_tx: float, cur_off: float,
-                             lead_v_proj: float, min_safe_dist: float) -> bytes:
-        # 统一在这里组帧，确保 ROS 输出与串口发送使用同一份控制结果。
-        return build_esp32_payload(
+    def _build_esp32_frame(self, ttc_tx: float, dist_tx: float,
+                           psi_tx: float, delta_tx: float, speed_tx: float,
+                           lon_tx: float, cur_off: float,
+                           lead_v_proj: float, min_safe_dist: float):
+        # 统一在这里组「控制帧」（协议中立的 Esp32ControlFrame），由 VehicleAdapter
+        # 负责实际组字节/下发，确保 ROS 输出与底盘下发使用同一份控制结果。
+        return (
             Esp32ControlFrame(
                 ttc=ttc_tx,
                 dist=dist_tx,
@@ -583,35 +624,11 @@ class AdasNode(Node):
                     self._loop_slow_count,
                     self._loop_max_elapsed_s * 1000.0,
                     CONTROL_LOOP_BUDGET_S * 1000.0,
-                    self.esp32.tx_dropped,
+                    self.vehicle.health()['tx_dropped'],
                 )
             self._loop_slow_count = 0
             self._loop_max_elapsed_s = 0.0
             self._last_slow_log_t = now
-
-    @staticmethod
-    def _build_safe_fallback_payload(lon_cmd: float) -> bytes:
-        """构造一组完全脱离 self.memory 的安全帧。
-
-        紧急停车/感知中断时不读取任何可能被 NaN 污染的状态字段，所有数值
-        都是硬编码的有限数，保证 ESP32 解析不会因 'nan'/'inf' 字符串失败。
-        """
-        return build_esp32_payload(
-            Esp32ControlFrame(
-                ttc=999.99,
-                dist=999.99,
-                psi=0.0,
-                delta=0.0,
-                speed=0.0,
-                lon=float(lon_cmd),
-                offset=0.0,
-                lead_v_proj=0.0,
-                min_safe_dist=0.0,
-                lane_warn_margin=LANE_DEFAULT_WIDTH * 0.5 * 0.6,
-                lane_hard_margin=LANE_DEFAULT_WIDTH * 0.5 * 0.4,
-                filtered_curv=0.0,
-            )
-        )
 
     def _send_emergency_stop(self):
         """向 ESP32 发送紧急停车帧：方向盘归零 + 最大制动。
@@ -622,9 +639,10 @@ class AdasNode(Node):
         if (now - self._last_emergency_stop_t) < EMERGENCY_STOP_MIN_INTERVAL_S:
             return
         self._last_emergency_stop_t = now
+        self._last_gate_reason = GATE_CTRL_ERROR
+        self._last_gate_severity = SEVERITY_CRITICAL
         try:
-            payload = self._build_safe_fallback_payload(LON_CMD_MAX_BRAKE_DECEL)
-            self.esp32.send(payload)
+            self.vehicle.send_safe_stop(LON_CMD_MAX_BRAKE_DECEL)
             self._critical_log.log(
                 'emergency_stop',
                 '[EMERGENCY STOP] %d consecutive errors, sending max brake',
@@ -642,9 +660,10 @@ class AdasNode(Node):
         if (now - self._last_sensor_brake_t) < EMERGENCY_STOP_MIN_INTERVAL_S:
             return
         self._last_sensor_brake_t = now
+        self._last_gate_reason = GATE_SENSOR_STALE
+        self._last_gate_severity = SEVERITY_WARN
         try:
-            payload = self._build_safe_fallback_payload(SENSOR_TIMEOUT_BRAKE_CMD)
-            self.esp32.send(payload)
+            self.vehicle.send_safe_stop(SENSOR_TIMEOUT_BRAKE_CMD)
         except Exception:
             pass
 
@@ -693,8 +712,7 @@ class AdasNode(Node):
         if (now - self._last_standby_tx_t) >= STANDBY_KEEPALIVE_INTERVAL_S:
             self._last_standby_tx_t = now
             try:
-                payload = self._build_safe_fallback_payload(STANDBY_HOLD_BRAKE_CMD)
-                self.esp32.send(payload)
+                self.vehicle.send_safe_stop(STANDBY_HOLD_BRAKE_CMD)
             except Exception:
                 pass
         if not self._in_standby:
@@ -727,58 +745,49 @@ class AdasNode(Node):
         lon_ctx = _res.lon_ctx
         lon_cmd = _res.lon_cmd
 
-        bad_fields = self._find_nonfinite_tx_fields(
-            lateral_ctx, lon_ctx, lon_cmd, _res.cur_lane_width)
-        if bad_fields:
+        # 统一命令门控：NaN → 不发（保持 MCU 上一帧），否则 clamp 后下发备帧。
+        decision = self.gate.evaluate(
+            lateral_ctx.upd_psi, lateral_ctx.delta, lateral_ctx.cur_off,
+            self.signals.ego_v, lon_cmd, lon_ctx.ttc, lon_ctx.dist,
+            lon_ctx.lead_v_proj, lon_ctx.min_safe_dist, _res.cur_lane_width,
+            self.memory.lane_warn_margin, self.memory.lane_hard_margin,
+            self.memory.filtered_curv,
+        )
+        if decision.blocked:
             return
-
-        ttc_tx = lon_ctx.ttc if is_finite(lon_ctx.ttc) else 999.99
-        dist_tx = clamp(lon_ctx.dist, 0.0, 999.99)
-        psi_tx = clamp(lateral_ctx.upd_psi, -9.9999, 9.9999)
-        delta_tx = clamp(lateral_ctx.delta, -9.9999, 9.9999)
-        speed_tx = clamp(self.signals.ego_v, -99.99, 99.99)
-        lon_tx = clamp(lon_cmd, -LON_CMD_MAX_DRIVE_ACCEL, LON_CMD_MAX_BRAKE_DECEL)
-        # 横向平滑常规速率（standby 无接管保护窗）；写回 last_delta 保持连续。
-        delta_tx = self.lat_smooth.update(delta_tx)
+        ttc_tx = decision.ttc
+        dist_tx = decision.dist
+        psi_tx = decision.psi
+        delta_tx = decision.delta
+        speed_tx = decision.speed
+        lon_tx = decision.lon
+        # 横向限幅经 gate（standby 无接管保护窗，扩展限幅默认关）；写回 last_delta 保持连续。
+        delta_tx = self.gate.filter_lateral(delta_tx, self.lat_smooth, False)
         self.memory.last_delta = delta_tx
 
-        payload = self._build_esp32_payload(
+        frame = self._build_esp32_frame(
             ttc_tx, dist_tx, psi_tx, delta_tx, speed_tx,
             lon_tx, lateral_ctx.cur_off, lon_ctx.lead_v_proj,
             lon_ctx.min_safe_dist)
-        self.esp32.send(payload)
+        self.vehicle.send_control(frame)
 
     def _find_nonfinite_tx_fields(self, lateral_ctx, lon_ctx,
                                   lon_cmd: float, cur_lane_width: float):
-        """返回所有将进入 ESP32 帧的原始标量中非有限（NaN/Inf）字段名列表。
+        """非有限字段检查（委托给 CommandGate.nonfinite_fields，单一真源）。
 
-        必须在 clamp 之前对原始值检查：clamp(v,lo,hi)=max(lo,min(hi,v)) 在
-        Python 中对 NaN 返回上界 hi，会把 NaN 静默放大成最大转角/最大制动，
-        事后检查 *_tx 永远是有限值，无法发现。所以这里查的是 clamp 前的源值。
-
-        ttc 不在此列：inf 是"无前车"的正常哨兵，已由 send 段
-        `ttc_tx = ... if is_finite else 999.99` 单独处理（NaN 也会落到 999.99）。
+        保留方法名以兼容既有调用/测试；候选清单与下发 clamp 区间集中在 gate。
         """
-        candidates = (
-            ('upd_psi', lateral_ctx.upd_psi),
-            ('delta', lateral_ctx.delta),
-            ('cur_off', lateral_ctx.cur_off),
-            ('ego_v', self.signals.ego_v),
-            ('lon_cmd', lon_cmd),
-            ('dist', lon_ctx.dist),
-            ('lead_v_proj', lon_ctx.lead_v_proj),
-            ('min_safe_dist', lon_ctx.min_safe_dist),
-            ('cur_lane_width', cur_lane_width),
-            ('lane_warn_margin', self.memory.lane_warn_margin),
-            ('lane_hard_margin', self.memory.lane_hard_margin),
-            ('filtered_curv', self.memory.filtered_curv),
-        )
-        return [name for name, v in candidates if not is_finite(v)]
+        return self.gate.nonfinite_fields(
+            lateral_ctx.upd_psi, lateral_ctx.delta, lateral_ctx.cur_off,
+            self.signals.ego_v, lon_cmd, lon_ctx.dist, lon_ctx.lead_v_proj,
+            lon_ctx.min_safe_dist, cur_lane_width,
+            self.memory.lane_warn_margin, self.memory.lane_hard_margin,
+            self.memory.filtered_curv)
 
     def _handle_nan_tx(self, bad_fields):
         """检测到控制输出含 NaN/Inf：发安全帧（转角0 + 轻制动）替代被污染的帧。
 
-        - ESP32：发 _build_safe_fallback_payload（全部硬编码有限值）。
+        - ESP32：经 vehicle.send_safe_stop（CommandGate 安全回退帧，全部硬编码有限值）。
         - ROS：发布安全值而非 NaN，便于监控看出"已降级"而不是把 NaN 扩散出去。
         - 主备：向备机广播安全种子（0/0/制动），避免 NaN 污染接管种子。
         - 日志：logging.error 指出是哪些字段 NaN，按窗口限频避免 100Hz 刷屏。
@@ -794,8 +803,7 @@ class AdasNode(Node):
             self._last_nan_tx_log_t = now
             self._nan_tx_count = 0
         try:
-            payload = self._build_safe_fallback_payload(SENSOR_TIMEOUT_BRAKE_CMD)
-            self.esp32.send(payload)
+            self.vehicle.send_safe_stop(SENSOR_TIMEOUT_BRAKE_CMD)
         except Exception as e:
             logging.critical('[NAN GUARD] failed to send safe frame: %s', e)
         # ROS 输出与主备种子都用安全值，杜绝 NaN 向外扩散
@@ -831,6 +839,8 @@ class AdasNode(Node):
 
     def _handle_lockstep_fault(self, now):
         """锁步失配 → 安全态：受控制动 + 安全 ROS 输出 + 安全种子，限频记 critical。"""
+        self._last_gate_reason = GATE_LOCKSTEP_FAULT
+        self._last_gate_severity = SEVERITY_CRITICAL
         if (now - self._last_lockstep_log_t) >= 1.0:
             logging.critical(
                 '[LOCKSTEP] 双核比较失配，控制器进入安全态（受控制动 %.1f m/s²）：%s',
@@ -838,8 +848,7 @@ class AdasNode(Node):
             )
             self._last_lockstep_log_t = now
         try:
-            payload = self._build_safe_fallback_payload(LOCKSTEP_SAFE_BRAKE_CMD)
-            self.esp32.send(payload)
+            self.vehicle.send_safe_stop(LOCKSTEP_SAFE_BRAKE_CMD)
         except Exception as exc:
             logging.critical('[LOCKSTEP] 安全帧发送失败：%s', exc)
         self._publish_outputs(0.0, 0.0, LOCKSTEP_SAFE_BRAKE_CMD, 0.0,
@@ -848,65 +857,11 @@ class AdasNode(Node):
 
     def _record_telemetry(self, now, lateral_ctx, lon_ctx, lead_ctx,
                           in_curve_hold, lon_cmd, lon_raw_cmd,
-                          psi_tx, delta_tx, speed_tx, lon_tx, cur_lane_width):
-        """组织本周期遥测行并非阻塞投递（写盘在后台线程，零阻塞控制环）。"""
-        self.telemetry.record({
-            't_wall': time.time(),
-            't_mono': now,
-            'cycle': self.memory.cycle_count,
-            'ego_x': self.signals.ego_x,
-            'ego_y': self.signals.ego_y,
-            'ego_yaw': self.signals.ego_yaw,
-            'ego_v': self.signals.ego_v,
-            'lead_x': self.signals.lead_x,
-            'lead_y': self.signals.lead_y,
-            'lead_v': self.signals.lead_v,
-            'road_psi': self.signals.road_psi,
-            'filtered_road_psi': self.memory.filtered_road_psi,
-            'raw_cte': lateral_ctx.raw_cte,
-            'filtered_cte': self.memory.filtered_cte,
-            'raw_curv': lateral_ctx.raw_curv,
-            'filtered_curv': self.memory.filtered_curv,
-            'curv_guard': lateral_ctx.curv_guard,
-            'in_curve': lateral_ctx.in_curve,
-            'delta': lateral_ctx.delta,
-            'delta_cte': lateral_ctx.delta_cte,
-            'delta_ff': lateral_ctx.delta_ff,
-            'boundary_delta': lateral_ctx.boundary_delta,
-            'psi_i_term': self.memory.psi_i_term,
-            'upd_psi': lateral_ctx.upd_psi,
-            'lon_raw_cmd': lon_raw_cmd,
-            'lon_cmd': lon_cmd,
-            'acc_i_term': self.lon_ctrl.i_term,
-            'aeb_active': lon_ctx.aeb_active,
-            'lead_cls': self.signals.lead_cls,
-            'in_curve_hold': in_curve_hold,
-            'dist': lon_ctx.dist,
-            'ttc': lon_ctx.ttc,
-            'lead_v_proj': lon_ctx.lead_v_proj,
-            'min_safe_dist': lon_ctx.min_safe_dist,
-            'closing_speed': lon_ctx.closing_speed,
-            'acc_has_lead': lead_ctx.acc_has_lead,
-            'lead_detected': lead_ctx.lead_detected,
-            'cur_lane_width': cur_lane_width,
-            'lane_safe_margin': self.memory.lane_safe_margin,
-            'lane_warn_margin': self.memory.lane_warn_margin,
-            'lane_hard_margin': self.memory.lane_hard_margin,
-            'boundary_brake': lateral_ctx.boundary_brake,
-            'boundary_warn': lateral_ctx.boundary_warn,
-            'psi_tx': psi_tx,
-            'delta_tx': delta_tx,
-            'speed_tx': speed_tx,
-            'lon_tx': lon_tx,
-            'esp_psi': self.esp32.esp_psi,
-            'esp_delta': self.esp32.esp_delta,
-            'esp_brake': self.esp32.esp_brake,
-            # class-aware AEB / 接管 cls 冗余诊断字段
-            'lead_cls_stale': bool(getattr(self, '_last_lead_cls_stale', False)),
-            'takeover_seed_cls': (self._takeover_seed_cls
-                                  if now < self._takeover_guard_until
-                                  else 0),
-        })
+                          psi_tx, delta_tx, speed_tx, lon_tx, cur_lane_width, fb=None):
+        """组织本周期遥测行（委托 TelemetryReporter；写盘在后台线程，零阻塞控制环）。"""
+        self.telemetry_reporter.record(
+            self, now, lateral_ctx, lon_ctx, lead_ctx, in_curve_hold,
+            lon_cmd, lon_raw_cmd, psi_tx, delta_tx, speed_tx, lon_tx, cur_lane_width, fb)
 
     def _select_primary_lead(self, now):
         """构建 PerceptionFrame，并按需用感知层选举结果写回 signals.lead_*。
@@ -984,7 +939,7 @@ class AdasNode(Node):
         3. 依次计算车道/LKA、目标车上下文、弯道保持、AEB、纵向控制。
         4. 发布 ROS 输出，发送 ESP32 控制帧，并同步主备心跳。
         """
-        self.esp32.drain_rx()
+        self.vehicle.drain()
         now = time.monotonic()
 
         # 单周期内只查询一次 is_active()，确保边沿检测语义与日志输出一致
@@ -1074,11 +1029,25 @@ class AdasNode(Node):
             takeover_rate = self._takeover_lon_rate()
         else:
             takeover_rate = None
+        # AEB 路径检查障碍列表：主核从感知帧构建（同 ml_result 模式——锁步影子核
+        # 复用同一列表，保证两遍计算逐位一致）。超车压制中的主目标剔除，避免与
+        # 超车"受控接近"打架；未启用时为 None，管线内零开销跳过。
+        if self.aeb_path is not None:
+            if bool(getattr(self.memory, 'suppress_lead_for_overtake', False)):
+                _ovt_excl = (self._last_lead_tid
+                             if self._last_lead_tid is not None else CAR2_ID)
+            else:
+                _ovt_excl = None
+            path_obstacles = obstacles_from_frame(
+                self._last_frame, exclude_tid=_ovt_excl)
+        else:
+            path_obstacles = None
         # 锁步：在主核改写 memory/managers **之前**深拷贝一份本拍前状态，供影子核
         # 重算（同输入 + 同前状态 + 同 ml_result → 确定性一致，零误报）。best-effort。
         ls_pre = self._lockstep_snapshot(signals_snap, takeover_rate)
         _res = run_pure_pipeline(
             now, signals_snap, self.memory, self.managers, takeover_rate,
+            path_obstacles=path_obstacles,
         )
         cur_lane_width = _res.cur_lane_width
         lateral_ctx = _res.lateral_ctx
@@ -1089,54 +1058,62 @@ class AdasNode(Node):
         lon_raw_cmd = _res.lon_raw_cmd
 
         # 锁步：把主核本拍输出 (delta / lon_cmd / AEB) 投给影子核做逐拍比较。
+        # path_obstacles 原样透传（同 ml_result），影子核重算取相同障碍输入。
         if ls_pre is not None:
             self.lockstep.submit(
                 now, ls_pre[0], ls_pre[1], ls_pre[2], ls_pre[3], _res.ml_result,
                 lateral_ctx.delta, lon_cmd, lon_ctx.aeb_active,
+                path_obstacles=path_obstacles,
             )
 
-        # NaN 防护：必须在 clamp 之前检查原始值（clamp 会把 NaN 放大成上界，
-        # 例如 delta=NaN → 最大转角，且 CRC 仍合法不会被 ESP32 丢帧）。
-        # 任一字段非有限就整帧改走安全回退，绝不把被污染的帧发出去。
-        bad_fields = self._find_nonfinite_tx_fields(
-            lateral_ctx, lon_ctx, lon_cmd, cur_lane_width)
-        if bad_fields:
-            self._handle_nan_tx(bad_fields)
+        # ── 统一命令门控：NaN 守护 + 串口范围 clamp + reason 分类（与原内联字节级一致）。
+        # NaN 检查必须在 clamp 之前查源值（clamp 会把 NaN 放大成上界 → 最大转角/全制动，
+        # 且 CRC 仍合法不被 ESP32 丢帧）；任一字段非有限即整帧改走安全回退。
+        # 横向平滑 / 接管限速是有状态执行器保护层，仍在本裁决之后由本节点施加。
+        takeover_active = now < self._takeover_guard_until
+        decision = self.gate.evaluate(
+            lateral_ctx.upd_psi, lateral_ctx.delta, lateral_ctx.cur_off,
+            self.signals.ego_v, lon_cmd, lon_ctx.ttc, lon_ctx.dist,
+            lon_ctx.lead_v_proj, lon_ctx.min_safe_dist, cur_lane_width,
+            self.memory.lane_warn_margin, self.memory.lane_hard_margin,
+            self.memory.filtered_curv,
+            aeb_active=bool(lon_ctx.aeb_active),
+            takeover_active=takeover_active,
+        )
+        self._last_gate_reason = decision.reason
+        self._last_gate_severity = decision.severity
+        if decision.blocked:
+            self._handle_nan_tx(list(decision.bad_fields))
             self.memory.cycle_count += 1
             return
+        ttc_tx = decision.ttc
+        dist_tx = decision.dist
+        psi_tx = decision.psi
+        delta_tx = decision.delta
+        speed_tx = decision.speed
+        lon_tx = decision.lon
 
-        # 串口协议字段范围有限，发送前统一裁剪到约定区间。
-        ttc_tx = lon_ctx.ttc if is_finite(lon_ctx.ttc) else 999.99
-        dist_tx = clamp(lon_ctx.dist, 0.0, 999.99)
-        psi_tx = clamp(lateral_ctx.upd_psi, -9.9999, 9.9999)
-        delta_tx = clamp(lateral_ctx.delta, -9.9999, 9.9999)
-        speed_tx = clamp(self.signals.ego_v, -99.99, 99.99)
-        lon_tx = clamp(lon_cmd, -LON_CMD_MAX_DRIVE_ACCEL, LON_CMD_MAX_BRAKE_DECEL)
-
-        # 横向最外层平滑：常规走 LAT_RATE_NORMAL，接管保护窗内收紧到
-        # TAKEOVER_DELTA_RATE。lon 的接管期收紧由 _apply_takeover_guard 单独处理
-        # （lon_smooth 已经在 pipeline 内部接收 takeover_rate）。
-        takeover_lat_rate = (
-            TAKEOVER_DELTA_RATE
-            if now < self._takeover_guard_until
-            else None
-        )
-        delta_tx = self.lat_smooth.update(delta_tx,
-                                          max_rate_override=takeover_lat_rate)
-        # 写回 memory.last_delta，让边界等内部状态在保护窗结束后能继续基于
-        # 真实输出做参考（与旧版 _apply_takeover_guard 中的 last_delta 写回等价）。
+        # 横向最外层限幅经 CommandGate.filter_lateral（gate 为唯一横向限幅权威）：
+        # 常规走 LAT_RATE_NORMAL，接管保护窗内收紧到 TAKEOVER_DELTA_RATE；扩展限幅
+        # （steer_cmd_diff_from_current）受 config.GATE_FILTER_EXT_ENABLED 控制，默认关。
+        # 默认与原 lat_smooth.update 内联字节级一致；lon 接管收紧仍由 _apply_takeover_guard。
+        # 本拍只读一次底盘回传，供 filter_lateral / publish / telemetry 共用（消除每拍 3 次冗余读）。
+        fb = self.vehicle.read_feedback()
+        delta_tx = self.gate.filter_lateral(
+            delta_tx, self.lat_smooth, takeover_active, esp_delta=fb.delta)
+        # 写回 memory.last_delta，让边界等内部状态在保护窗结束后能继续基于真实输出做参考。
         self.memory.last_delta = delta_tx
 
         # 主备接管保护窗口内对 lon 单独施加更严的变化率限制（保险网）
         lon_tx, delta_tx = self._apply_takeover_guard(now, lon_tx, delta_tx)
 
-        self._publish_outputs(psi_tx, delta_tx, lon_tx, lateral_ctx.cur_off, cur_lane_width)
+        self._publish_outputs(psi_tx, delta_tx, lon_tx, lateral_ctx.cur_off, cur_lane_width, fb)
 
-        payload = self._build_esp32_payload(
+        frame = self._build_esp32_frame(
             ttc_tx, dist_tx, psi_tx, delta_tx, speed_tx,
             lon_tx, lateral_ctx.cur_off, lon_ctx.lead_v_proj, lon_ctx.min_safe_dist
         )
-        self.esp32.send(payload)
+        self.vehicle.send_control(frame)
 
         self._sync_peer_output(psi_tx, delta_tx, lon_tx,
                                aeb_active=bool(lon_ctx.aeb_active),
@@ -1150,7 +1127,7 @@ class AdasNode(Node):
         self._record_telemetry(now, lateral_ctx, lon_ctx, lead_ctx,
                                in_curve_hold, lon_cmd, lon_raw_cmd,
                                psi_tx, delta_tx, speed_tx, lon_tx,
-                               cur_lane_width)
+                               cur_lane_width, fb)
 
         self.memory.last_acc_has_lead = lead_ctx.acc_has_lead
         self.memory.cycle_count += 1
@@ -1332,17 +1309,30 @@ class AdasNode(Node):
         'ACC_KV': ('acc_kv', 'acc_kv'),
         'ACC_KA': ('acc_ka', 'acc_ka'),
     }
+    _RUNTIME_SPEED_HARD_MAX_MPS = 80.0 / 3.6
+    _RUNTIME_SPEED_PARAM_MAP = {
+        'ego_speed': ('driver_set_speed', 1.0 / 3.6),
+        'target_speed_kmh': ('driver_set_speed', 1.0 / 3.6),
+        'driver_set_speed': ('driver_set_speed', 1.0),
+        'DRIVER_SET_SPEED': ('driver_set_speed', 1.0),
+        'system_max_cruise': ('system_max_cruise', 1.0),
+        'SYSTEM_MAX_CRUISE': ('system_max_cruise', 1.0),
+        'road_limit_speed': ('road_limit_speed', 1.0),
+        'ROAD_LIMIT_SPEED': ('road_limit_speed', 1.0),
+    }
 
     def _set_param_callback(self, msg):
-        """处理 /adas/set_param 的 "NAME=VALUE"：仅白名单增益可热更新。
+        """处理 /adas/set_param。
 
-        校验：格式合法 + 在白名单内 + 值有限且非负（与
-        LongitudinalController.set_gains 的 max(0.0,..) 语义一致）。
-        非法/越权一律拒绝并 WARNING，不改任何状态。
+        HIL JSON 只作为 ADAS 侧目标请求，最终速度仍由本节点限幅后进入控制器；
+        旧的 "NAME=VALUE" 格式继续只允许白名单增益热更新。
         """
         try:
             raw = str(msg.data).strip()
         except Exception:
+            return
+        if raw.startswith('{'):
+            self._apply_runtime_command(raw)
             return
         if '=' not in raw:
             logging.warning('[SET_PARAM] bad format %r (need NAME=VALUE)', raw)
@@ -1375,10 +1365,69 @@ class AdasNode(Node):
             '' if lon_kw is None else ' + lon_ctrl',
         )
 
+    def _apply_runtime_command(self, raw: str) -> None:
+        try:
+            cmd = json.loads(raw)
+        except Exception as exc:
+            logging.warning('[SET_PARAM] bad runtime json %r: %r', raw[:160], exc)
+            return
+        if not isinstance(cmd, dict):
+            logging.warning('[SET_PARAM] reject non-object runtime command %r', cmd)
+            return
+        seq = cmd.get('seq')
+        if seq is not None:
+            try:
+                seq_i = int(seq)
+            except (TypeError, ValueError):
+                logging.warning('[SET_PARAM] reject runtime command with bad seq %r', seq)
+                return
+            last = int(getattr(self.memory, 'runtime_command_seq', 0))
+            if seq_i <= last:
+                return
+            self.memory.runtime_command_seq = seq_i
+
+        params = cmd.get('params', {})
+        if not isinstance(params, dict):
+            logging.warning('[SET_PARAM] reject runtime command with bad params %r', params)
+            return
+        applied = []
+        for name, raw_value in params.items():
+            mapping = self._RUNTIME_SPEED_PARAM_MAP.get(str(name))
+            if mapping is None:
+                logging.warning('[SET_PARAM] reject non-whitelisted runtime param %r', name)
+                continue
+            attr, scale = mapping
+            try:
+                value = float(raw_value) * scale
+            except (TypeError, ValueError):
+                logging.warning('[SET_PARAM] %s: non-numeric runtime value %r', name, raw_value)
+                continue
+            if not is_finite(value):
+                logging.warning('[SET_PARAM] %s: non-finite runtime value %r', name, raw_value)
+                continue
+            value = clamp(value, 0.0, self._RUNTIME_SPEED_HARD_MAX_MPS)
+            setattr(self.memory, attr, value)
+            if attr == 'driver_set_speed':
+                self.memory.system_max_cruise = max(
+                    float(getattr(self.memory, 'system_max_cruise', SYSTEM_MAX_CRUISE)),
+                    value,
+                )
+                self.memory.road_limit_speed = max(
+                    float(getattr(self.memory, 'road_limit_speed', ROAD_LIMIT_SPEED)),
+                    value,
+                )
+                self.memory.system_max_cruise = min(
+                    self.memory.system_max_cruise, self._RUNTIME_SPEED_HARD_MAX_MPS)
+                self.memory.road_limit_speed = min(
+                    self.memory.road_limit_speed, self._RUNTIME_SPEED_HARD_MAX_MPS)
+            applied.append('%s=%.2fmps' % (attr, value))
+        if applied:
+            logging.info('[SET_PARAM] runtime command applied: %s', ', '.join(applied))
+
     # ----------------------------------------------------------
     def destroy_node(self):
-        """ROS 节点销毁时关闭串口和心跳连接。"""
-        self.esp32.close()
+        """ROS 节点销毁时关闭车辆接口和心跳连接。"""
+        self.vehicle.close()
         self.peer_hb.close()
         self.telemetry.close()
         super().destroy_node()
@@ -1515,6 +1564,14 @@ def main(argv=None):
                 rt_affinity.isolate_control_core(RT_CONTROL_CORE, RT_PIN_RESWEEP_S)
             except Exception as exc:
                 logging.getLogger(__name__).warning("[RT] 线程级钉核启用失败（忽略）：%r", exc)
+        # 控制主线程实时调度（SCHED_FIFO）：必须在钉核之后（keeper 等后台线程
+        # 已创建完，不会继承 FIFO）。RT_FIFO_PRIO=0（默认）完全关闭，行为不变。
+        if RT_FIFO_PRIO > 0:
+            try:
+                import rt_affinity
+                rt_affinity.set_control_thread_fifo(RT_FIFO_PRIO)
+            except Exception as exc:
+                logging.getLogger(__name__).warning("[RT] SCHED_FIFO 启用失败（忽略）：%r", exc)
         rclpy.spin(node)
     except KeyboardInterrupt:
         pass

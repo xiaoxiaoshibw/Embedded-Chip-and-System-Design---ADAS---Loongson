@@ -47,7 +47,7 @@ TM_PORT = int(os.environ.get("CARLA_TM_PORT", "8010"))
 # 场景名 → 自车出生点（沿用 carla_bridge/pc/scenarios 的取值）
 _SPAWN_INDEX = {
     "acc_follow": 30, "aeb_brake": 30, "lka_curve": 30,
-    "cut_in": 30, "takeover": 30,
+    "cut_in": 30, "pedestrian_cross": 30, "takeover": 30,
 }
 
 
@@ -78,11 +78,15 @@ def params_to_scenario(name: str, params: Dict[str, Any]) -> Dict[str, Any]:
                 "profile": [(0.0, front_v), (brake_t, 0.0)],
                 "hard_brake": (brake_t, brake_t + 7.0)}
     elif name == "cut_in":
-        # 注：carla_link 无横向切入机动，这里近似为「近距前车 + 切入速度」。
-        # 真正的横向 cut-in 机动留作后续（用 set_lead_speed + 变道脚本扩展）。
         cut_d = float(params.get("cut_in_trigger_distance", 25.0))
         cut_v = float(params.get("cut_in_speed", 40.0)) / 3.6
-        lead = {"gap0": cut_d, "profile": [(0.0, cut_v)], "hard_brake": None}
+        lead = {"gap0": cut_d, "profile": [(0.0, cut_v)], "hard_brake": None,
+                "actor": "vehicle", "cls": 1, "lateral_offset": -3.6,
+                "cut_in": True, "cut_in_at": 3.0, "cut_in_duration": 2.8}
+    elif name == "pedestrian_cross":
+        lead = {"gap0": front_d, "profile": [(0.0, 0.0)], "hard_brake": None,
+                "actor": "pedestrian", "cls": 3, "lateral_offset": -1.6,
+                "cross_speed": float(params.get("pedestrian_speed", 1.6))}
     else:  # acc_follow / takeover / 其它
         lead = {"gap0": front_d, "profile": [(0.0, front_v)], "hard_brake": None}
 

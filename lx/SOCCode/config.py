@@ -127,6 +127,11 @@ CUTIN_LAT_RATE_ALPHA = 0.15                # 横向逼近速率低通系数（�
 #        带 PID 自动回退。Jetson 算力安全（微秒级，远低于 8ms 预算）。
 LON_CONTROLLER = 'pid'
 
+# ── 车辆/底盘接口选择（VehicleAdapter）─────────────────────
+# 'esp32'（默认）：真实 ESP32 串口适配；'sim'：离线/HIL 回显适配（不碰串口）。
+# 上层控制只产出 Esp32ControlFrame，由适配器组帧/下发/读回传，换执行器零改控制层。
+VEHICLE_ADAPTER = os.environ.get('ADAS_VEHICLE_ADAPTER', 'esp32')
+
 # ── Lateral controller selection ───────────────────────────
 # 'pid' (default): existing heading-PID + curvature FF + CTE path.
 # 'stanley': model-based path-tracking drop-in with automatic fallback to PID.
@@ -243,6 +248,14 @@ LOOP_HZ = _resolve_loop_hz()               # 主控循环频率 (Hz)，可经环
 RT_THREAD_PIN = os.environ.get('RT_THREAD_PIN', '1') not in ('0', 'false', 'False')
 RT_CONTROL_CORE = int(os.environ.get('RT_CONTROL_CORE', '0'))
 RT_PIN_RESWEEP_S = 3.0                      # 守护线程重扫间隔 (s)，覆盖后启动的线程
+
+# 控制主线程实时调度（SCHED_FIFO）：>0 时在钉核之后把控制主循环线程提升为该
+# 实时优先级，压低 schedutil/普通调度下的尾延迟慢拍（实机曾见 max 8~49ms 超
+# 8ms 预算）。需 CAP_SYS_NICE 或非零 RLIMIT_RTPRIO（HIL 单元经 systemd
+# AmbientCapabilities / LimitRTPRIO 授予，见 start_hil_adas.py）；无权限时
+# 自动降级保持 SCHED_OTHER，控制功能不变。0（默认）完全关闭——开发机 / SIL /
+# 离线工具与原行为一致。内核 RT throttling（950ms/1s）兜底防跑飞。
+RT_FIFO_PRIO = int(os.environ.get('RT_FIFO_PRIO', '0'))
 
 # ── 单板软件双核锁步（lockstep，见 lockstep.py）──
 # 主核(core0)与影子/Checker 核(LOCKSTEP_CHECKER_CORE)对同一拍输入各算一遍控制管线，
@@ -477,7 +490,7 @@ AEB_CLASS_LAT_GATE_MULT = {
     ACTOR_CLASS_UNKNOWN:    1.0,
     ACTOR_CLASS_VEHICLE:    1.0,
     ACTOR_CLASS_OBSTACLE:   1.15,
-    ACTOR_CLASS_PEDESTRIAN: 1.35,
+    ACTOR_CLASS_PEDESTRIAN: 2.50,
 }
 # AEB_CLASS_FULL_CONFIRM_CYCLES 见下方 AEB_FULL_CONFIRM_CYCLES 之后定义
 # （此处不能前置引用 AEB_FULL_CONFIRM_CYCLES，它在 502 行）。
@@ -534,6 +547,14 @@ TAKEOVER_LON_RATE_AEB_RELEASE = 12.0        # AEB 种子接管时的衰减速率
 # 比 TAKEOVER_LON_RATE 更严（数值更小=更慢变化），避免行人横穿瞬间备机突然加速。
 TAKEOVER_LON_RATE_VULNERABLE = 4.0          # 行人/障碍接管时的衰减速率 (m/s³)
 TAKEOVER_DELTA_RATE = math.radians(25)      # 保护期方向盘变化率 (rad/s)
+
+# ── CommandGate 完整 filter（★2 阶段B：Autoware 式扩展横向限幅）──
+# 默认关 → gate.filter_lateral 仅做原 lat_smooth 限幅，与改造前**字节级一致**。
+# 开启会改变控制（对指令-实际转角差施加限幅），须实机回归确认后再开。
+GATE_FILTER_EXT_ENABLED = os.environ.get('ADAS_GATE_FILTER_EXT', '0') == '1'
+GATE_STEER_DIFF_MAX = math.radians(12)      # nominal：指令与 ESP32 回读转角最大差 (rad)，约 12°（对标 Autoware steer_cmd_diff_lim_from_current_steer）
+GATE_STEER_DIFF_MAX_TRANSITION = math.radians(6)  # transition：接管/过渡期更严（对标 Autoware transition_filter）
+
 # 主备 flapping 抑制：上次接管边沿后此窗口内再次触发，只延长保护期，
 # 不重新 reset lon_smooth，避免内部状态被反复覆盖。
 TAKEOVER_COOLDOWN_S = 1.0
@@ -636,6 +657,15 @@ OVT_CRUISE_DRIVE_ACCEL = 1.2                 # 超车巡航最大驱动加速度
 # ── 弯道禁止加速阈值 ──
 CURV_NO_ACCEL_THRESH = 0.008               # 曲率超过此值禁止加速
 
+# ── 曲率保护值抗尖刺 + 滞回（修"拐弯速度跳变/突然停、TTC 抖动"）──
+# road_psi 按离散路点更新，rrate 出现单样本尖刺，raw_curv=rrate/ego_v 随之尖刺。
+# 旧 curv_guard=max(|filtered|,|raw|) 把尖刺直透给 v_curve_max=sqrt(a/curv)，
+# 导致弯道目标速度瞬间塌缩再弹回。三个参数把 guard 限制在"滤波趋势+余量"内、
+# 受限速率向下释放，并给 in_curve 加滞回，消除边界 0/1 翻转。
+CURV_GUARD_LEAD_MARGIN = 0.010             # raw 对 guard 的领先余量上限 (1/m)
+CURV_GUARD_RELEASE_RATE = 0.060            # guard 向下释放速率 (1/m/s)
+CURV_IN_CURVE_EXIT_RATIO = 0.60            # in_curve 退出滞回比例（×进入阈值）
+
 # ── 前车检测参数（续） ──
 LEAD_MEMORY_S = 1.5                         # 前车位置记忆时间 (s)
 LEAD_LOSS_COAST_S = 1.0                     # 前车丢失后巡航过渡时间 (s)
@@ -689,6 +719,37 @@ ACC_LEAD_RELEASE_LANE_OUT_CYCLES = 4          # 前车偏离车道释放周期�
 ACC_LEAD_RELEASE_OPENING_CYCLES = 4           # 前车远离释放周期数
 ACC_LEAD_ACQUIRE_GRACE_S = 0.8               # 前车获取保护时间 (s)
 ACC_LEAD_ACQUIRE_MAX_BRAKE = -0.7             # 前车获取最大制动限制 (m/s²)
+
+# ── AEB 预测路径碰撞检查（对标 Autoware autonomous_emergency_braking）──
+# 现有 AEB 只盯"选举出的主前车"（TTC/距离判据）；本层用自车运动学 footprint
+# 路径 + RSS 最小安全距离，对感知帧**全部** fresh 目标（含横穿行人、未选举
+# 目标）做碰撞预测，与 TTC 门 OR 融合（只通过 max() 抬高制动，从不减小）。
+# 默认关（AEB_PATH_CHECK_ENABLED=0）→ managers.aeb_path 不实例化 → 与原行为
+# 字节级一致。开启须先离线场景回归，再 HIL 实机回归（同 GATE_FILTER_EXT 纪律）。
+AEB_PATH_CHECK_ENABLED = os.environ.get('ADAS_AEB_PATH_CHECK', '0') == '1'
+AEB_PATH_HORIZON_S = 2.5                    # 自车路径前瞻时域 (s)
+AEB_PATH_STEP_S = 0.1                       # 路径积分步长 (s)
+AEB_PATH_LAT_MARGIN = 0.3                   # footprint 横向安全边距 (m)
+AEB_PATH_LON_MARGIN = 2.5                   # 纵向碰撞判定半长（自车半长+目标半长+缓冲, m）
+AEB_PATH_PREFILTER_LAT = 3.5                # 进入路径检查的初始横向窗口 (m)
+AEB_PATH_CONFIRM_CYCLES = 3                 # 连续 N 拍碰撞预测才触发（消抖；退出 -2 与主 AEB 对称）
+AEB_PATH_TCOL_FULL_S = 1.2                  # 预测碰撞时间 ≤ 此值 → 全力制动
+AEB_PATH_TCOL_START_S = 2.5                 # 预测碰撞时间 ≤ 此值 → 渐进制动起点
+AEB_PATH_YAWRATE_SIGN = 1.0                 # ego 路径 ω 符号旋钮（坐标系约定保险，实车验证后固定）
+AEB_PATH_MIN_EGO_V = 1.0                    # 低于此速不做路径检查 (m/s)（对齐 Autoware standstill 门）
+# 目标半宽按 class 查表（.get(cls, 车辆默认)——与 AEB_CLASS_* 约定一致，未知 class 不崩溃）
+AEB_PATH_OBS_HALF_WIDTH = {
+    ACTOR_CLASS_UNKNOWN:    0.9,
+    ACTOR_CLASS_VEHICLE:    0.9,
+    ACTOR_CLASS_OBSTACLE:   0.6,
+    ACTOR_CLASS_PEDESTRIAN: 0.4,
+}
+# RSS 纵向最小安全距离（仅对"当前已在走廊内"的目标）：
+# d_rss = v_ego·ρ + v_ego²/(2·a_ego) − v_obs²/(2·a_obs)，下限 AEB_RSS_MIN_DIST
+AEB_RSS_REACT_S = 0.5                       # 反应时间 ρ (s)
+AEB_RSS_EGO_DECEL = 6.0                     # 自车可用制动 (m/s²)
+AEB_RSS_OBS_DECEL = 8.0                     # 目标最大制动假设 (m/s²)
+AEB_RSS_MIN_DIST = 2.0                      # RSS 距离下限 (m)
 
 
 # ==========================================================

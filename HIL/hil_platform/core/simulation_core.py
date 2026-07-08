@@ -219,7 +219,11 @@ class SimulationCore:
             meta = self._finalize_record()
             self._last_meta = meta
             try:
-                self.bridge.reset()
+                stop_run = getattr(self.bridge, "stop_run", None)
+                if callable(stop_run):
+                    stop_run()
+                else:
+                    self.bridge.reset()
             except Exception as exc:
                 self._loop_error = "停止后清理底层资源失败：%r" % exc
             return self.status()

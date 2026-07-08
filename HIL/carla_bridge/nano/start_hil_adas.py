@@ -99,9 +99,18 @@ def kill_adas():
 def start_adas(role, domain, password):
     unit = unit_name(role)
     log = "/tmp/adas_hil_%s.log" % role
-    # 默认把 ADAS 钉到 core 0,1（控制主循环 + DDS/ML 两热线程各得一核，减 100Hz 抖动）；
-    # gateway 用 core2、edge 用 core3 由 hil_platform 侧分配。可用 ADAS_CPU_LIST 覆盖。
-    cpu_list = os.environ.get("ADAS_CPU_LIST", "0,1").strip()
+    # Default four-core split for HIL:
+    # core0 = ADAS control loop, core1 = ROS2 gateway (Windows-TCP HIL path) /
+    # free (Ubuntu direct-topic path, no gateway on Nano), core2 = software
+    # lockstep shadow controller, core3 = log/archive collector.
+    cpu_list = os.environ.get("ADAS_CPU_LIST", "0,1,2").strip()
+    rt_control_core = os.environ.get("RT_CONTROL_CORE", "0").strip() or "0"
+    rt_aux_cores = os.environ.get("RT_AUX_CORES", "1").strip() or "1"
+    lockstep_enabled = os.environ.get("LOCKSTEP_ENABLED", "1").strip() or "1"
+    lockstep_checker_core = os.environ.get("LOCKSTEP_CHECKER_CORE", "2").strip() or "2"
+    # 控制主线程 SCHED_FIFO 优先级（HIL 默认 50；0=关）。权限由单元属性
+    # AmbientCapabilities/LimitRTPRIO 授予，SOCCode 侧无权限自动降级。
+    rt_fifo_prio = os.environ.get("RT_FIFO_PRIO", "50").strip() or "50"
     taskset = ("taskset -c %s " % cpu_list) if cpu_list else ""
     # 单元 ExecStart：source 配置 + ROS2 + HIL 隔离 domain，再 exec ADAS（exec 让
     # python 成为单元 MainPID，被杀即触发 systemd 重启）。$ROS_SETUP / $ADAS_HOME 由
@@ -117,12 +126,18 @@ def start_adas(role, domain, password):
         "export ROS_DOMAIN_ID=%d; "
         "export ROS_LOCALHOST_ONLY=0; "
         "export NANO_ROLE=%s; "
+        "export RT_CONTROL_CORE=%s; "
+        "export RT_AUX_CORES=%s; "
+        "export LOCKSTEP_ENABLED=%s; "
+        "export LOCKSTEP_CHECKER_CORE=%s; "
+        "export RT_FIFO_PRIO=%s; "
         "export PRIMARY_IP=192.168.3.125; "
         "export SECONDARY_IP=192.168.3.124; "
         "export OPENBLAS_CORETYPE=ARMV8; "
         "cd \"$ADAS_HOME/lx/SOCCode\"; "
         "exec %spython3 ADAS.py --role %s >> %s 2>&1"
-    ) % (domain, role, taskset, role, log)
+    ) % (domain, role, rt_control_core, rt_aux_cores, lockstep_enabled,
+         lockstep_checker_core, rt_fifo_prio, taskset, role, log)
 
     # 1) 每次显式启动清空日志（自有文件，免 sudo）；systemd 自动重启则在本次会话内追加。
     run(": > %s 2>/dev/null || true" % log)
@@ -130,6 +145,12 @@ def start_adas(role, domain, password):
     #    开机不可靠，开跑前兜底）。
     run("sudo -S sh -c 'chgrp dialout /dev/ttyTHS1 2>/dev/null; "
         "chmod 660 /dev/ttyTHS1 2>/dev/null; true'", password + "\n")
+    # 2.5) CPU governor → performance：schedutil 的升频迟滞会造成控制环慢拍
+    #      （实机曾见 max 8~49ms 超 8ms 预算）。每次启动兜底设置；持久化由板上
+    #      cpu-performance.service 负责，此处兜的是"该单元被禁/失效"的情况。
+    run("sudo -S sh -c 'for g in /sys/devices/system/cpu/cpu*/cpufreq/"
+        "scaling_governor; do echo performance > \"$g\" 2>/dev/null || true; "
+        "done; true'", password + "\n")
     # 3) 注册受 systemd 监管的 transient 单元：Restart=always 即真实系统自愈语义。
     props = [
         "--property=Restart=always",
@@ -141,6 +162,11 @@ def start_adas(role, domain, password):
         "--property=User=jetson",
         "--property=Group=jetson",
         "--property=Environment=HOME=/home/jetson",
+        # 允许 User=jetson 下把控制主线程设为 SCHED_FIFO（rt_affinity.
+        # set_control_thread_fifo）：AmbientCapabilities 走 CAP_SYS_NICE 主路径，
+        # LimitRTPRIO 是老 systemd 不支持 ambient 时的 rlimit 备份路径。
+        "--property=AmbientCapabilities=CAP_SYS_NICE",
+        "--property=LimitRTPRIO=99",
     ]
     cmd = (
         "sudo -S systemd-run --unit=%s --collect %s /bin/bash -lc %s"

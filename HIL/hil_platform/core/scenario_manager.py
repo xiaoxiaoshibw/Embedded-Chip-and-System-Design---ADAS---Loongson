@@ -20,6 +20,7 @@ SCENARIO_TITLES = {
     "aeb_brake": "AEB 自动紧急制动",
     "lka_curve": "LKA 车道保持（弯道）",
     "cut_in": "Cut-in 切入",
+    "pedestrian_cross": "行人横穿 AEB",
     "takeover": "主控故障接管",
 }
 

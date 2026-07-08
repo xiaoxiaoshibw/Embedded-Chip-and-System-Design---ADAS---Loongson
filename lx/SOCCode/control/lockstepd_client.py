@@ -190,10 +190,11 @@ class LockstepdClient(object):
     # ── 公共接口 ──
 
     def submit(self, now, signals, memory, managers, takeover_rate, ml_result,
-               main_delta, main_lon, main_aeb):
+               main_delta, main_lon, main_aeb, path_obstacles=None):
         """投递本拍状态给 lockstepd。非阻塞：先 poll 上次结果，再发新请求。
 
-        与旧版 LockstepChecker.submit 接口兼容。
+        与旧版 LockstepChecker.submit 接口兼容。path_obstacles（可选）为主核
+        构建的 AEB 路径检查障碍列表（plain tuple 列表），影子核原样复用。
         """
         if not self.enabled:
             return
@@ -220,6 +221,7 @@ class LockstepdClient(object):
                 'main_delta': float(main_delta),
                 'main_lon': float(main_lon),
                 'main_aeb': bool(main_aeb),
+                'path_obstacles': path_obstacles,
             })
         except (ConnectionError, OSError) as e:
             self.enabled = False

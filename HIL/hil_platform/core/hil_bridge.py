@@ -23,6 +23,7 @@ from .types import (
     CTRL_NONE,
     CTRL_SAFE_BRAKE,
     ControllerState,
+    DiagnosticsState,
     EgoState,
     Esp32State,
     StateFrame,
@@ -290,6 +291,32 @@ class MockHilBridge(HilBridge):
             return float("inf")
         return self.front_distance / closing
 
+    # ── 结构化安全诊断（镜像 Nano 端 CommandGate reason + AEB overlay level）──
+    # 全部从上面已算的 mock 动力学真实派生，非编造：跟随 TTC / 接管 / 安全制动联动。
+    def _aeb_diagnostics(self, ttc: float) -> Tuple[str, float]:
+        if not self.front_present or ttc == float("inf"):
+            return "safe", 0.0
+        closing = max(self.ego_v - self.front_v, 0.0)
+        dist = max(self.front_distance, 0.1)
+        drac = min(closing * closing / (2.0 * dist), 20.0) if closing > 1e-3 else 0.0
+        if ttc <= 5.0 or ttc < AEB_TTC:
+            level = "emergency"
+        elif ttc <= 15.0:
+            level = "warning"
+        else:
+            level = "safe"
+        return level, drac
+
+    def _gate_diagnostics(self, frame: StateFrame, ttc: float) -> Tuple[str, int]:
+        esp = frame.esp32
+        if esp.safe_brake:
+            return "ctrl_error", 2            # 双失效 → 安全制动兜底
+        if esp.active_controller == CTRL_NANO_B:
+            return "backup_takeover", 1        # 备控接管中
+        if self.front_present and ttc != float("inf") and ttc < AEB_TTC:
+            return "aeb_override", 1           # AEB 全力制动帧
+        return "normal", 0
+
     def step(self, dt: float, sim_t: float,
              fault_injector: FaultInjector) -> Tuple[StateFrame, List[dict]]:
         # 1) 前车 / 道路推进
@@ -355,6 +382,14 @@ class MockHilBridge(HilBridge):
         else:
             frame.target = TargetState(front_distance=float("inf"),
                                        relative_speed=0.0, ttc=float("inf"))
+
+        # 7.5) 结构化安全诊断（从上面动力学真实派生，镜像 Nano CommandGate/AEB overlay）
+        ttc_now = self._ttc()
+        g_reason, g_sev = self._gate_diagnostics(frame, ttc_now)
+        a_level, a_drac = self._aeb_diagnostics(ttc_now)
+        frame.diagnostics = DiagnosticsState(
+            gate_reason=g_reason, gate_severity=g_sev,
+            aeb_level=a_level, aeb_drac=round(a_drac, 3))
 
         # 8) 该帧事件标记（仲裁事件优先于无）
         if frame.event is None and events:

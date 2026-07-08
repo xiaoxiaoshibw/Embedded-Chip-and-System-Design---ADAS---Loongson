@@ -11,9 +11,16 @@ replay.py / 评测框架复用）。
 
 开关：环境变量 TELEMETRY=0 完全关闭（record() 变成空操作，零开销）。
 路径：/tmp/adas_<role>_telemetry_<启动时间>.csv
+
+生命周期（防实机文件堆积，2026-07-03）：
+  - 懒建文件：CSV 在**第一行数据**到达时才创建——空闲重启不再留下 645 字节
+    的纯表头文件（实机曾积 76 个）。
+  - 保留清理：写盘线程启动时按 mtime 只保留本 role 最近 TELEMETRY_KEEP
+    （默认 20）个历史 CSV，更旧的删除。TELEMETRY_KEEP=0 关闭清理。
 """
 
 import csv
+import glob
 import logging
 import os
 import queue
@@ -45,6 +52,22 @@ FIELDS = (
     'lead_cls',          # 主前车 class (0/1/2/3)
     'lead_cls_stale',    # /car{N}_class 话题陈旧（不降级控制，仅观察）
     'takeover_seed_cls', # 接管期使用的种子 cls；非接管期保持 0
+    # 命令门控结构化诊断（CommandGate）——追加在末尾，切勿插中间
+    'gate_reason',       # normal/aeb_override/backup_takeover/nan_block/sensor_stale/lockstep_fault/ctrl_error
+    'gate_severity',     # 0 正常 / 1 告警 / 2 严重
+    # AEB 结构化诊断 overlay（对标 Autoware AEB node；只读投影）
+    'aeb_level',         # safe / warning / emergency
+    'aeb_drac',          # 避撞所需减速度 (m/s²)
+    # 统一安全状态聚合（对标 openpilot selfdriveState / onroadEvents）
+    'safety_level',      # 0 nominal / 1 degraded / 2 emergency
+    'safety_state',      # nominal / degraded / emergency
+    # ★5 planning→control 接口（只读投影：横向期望偏移 + 纵向期望速度）
+    'target_offset',     # 期望横向偏移 (m)，含超车借道
+    'target_speed',      # 期望速度 (m/s)
+    # AEB 预测路径碰撞检查（control/aeb_path_check.py）——追加在末尾，切勿插中间
+    'aeb_path_risk',     # 本拍路径/RSS 命中（未消抖，0/1）
+    'aeb_path_tcol',     # 最早预测碰撞时间 (s)
+    'aeb_rss_dist',      # 触发目标 RSS 最小安全距离 (m)
 )
 
 _QUEUE_MAXSIZE = 4096          # 100Hz 下约 40s 缓冲
@@ -72,30 +95,72 @@ class Telemetry:
         self._fh = None
         self._writer = None
         self._path = None
+        self._role = role
         if not self._enabled:
             logging.info('[TELEMETRY] disabled (TELEMETRY=0)')
             return
         ts = time.strftime('%Y%m%d_%H%M%S')
         # 默认 /tmp（Jetson Linux）；TELEMETRY_DIR 可覆盖（Windows 开发/测试用）
-        out_dir = os.environ.get('TELEMETRY_DIR', '/tmp')
+        self._out_dir = os.environ.get('TELEMETRY_DIR', '/tmp')
         self._path = os.path.join(
-            out_dir, 'adas_%s_telemetry_%s.csv' % (role, ts))
+            self._out_dir, 'adas_%s_telemetry_%s.csv' % (role, ts))
+        # 懒建文件：此处不 open；第一行数据到达时由写盘线程创建（见 _ensure_open）。
+        self._thread = threading.Thread(
+            target=self._writer_loop, name='telemetry', daemon=True,
+        )
+        self._thread.start()
+        logging.info('[TELEMETRY] will log to %s (lazy-create on first row)',
+                     self._path)
+
+    def _ensure_open(self):
+        """首行数据到达时创建 CSV 并写表头（仅写盘线程调用）。
+
+        返回 True 表示文件可写；打开失败关闭遥测（与原 __init__ 失败语义一致）。
+        """
+        if self._writer is not None:
+            return True
+        if not self._enabled:
+            return False
         try:
             # newline='' 是 csv 模块标准要求，避免空行
             self._fh = open(self._path, 'w', newline='')
             self._writer = csv.writer(self._fh)
             self._writer.writerow(FIELDS)
             self._fh.flush()
+            logging.info('[TELEMETRY] logging to %s', self._path)
+            return True
         except Exception as e:
             logging.error('[TELEMETRY] cannot open %s: %s (telemetry off)',
                           self._path, e)
             self._enabled = False
+            return False
+
+    def _cleanup_old_files(self):
+        """按 mtime 只保留本 role 最近 TELEMETRY_KEEP 个历史 CSV（写盘线程启动时）。
+
+        当前会话文件尚未创建（懒建），不在删除范围。失败只记 debug，不影响遥测。
+        """
+        try:
+            keep = int(os.environ.get('TELEMETRY_KEEP', '20'))
+        except ValueError:
+            keep = 20
+        if keep <= 0:
             return
-        self._thread = threading.Thread(
-            target=self._writer_loop, name='telemetry', daemon=True,
-        )
-        self._thread.start()
-        logging.info('[TELEMETRY] logging to %s', self._path)
+        try:
+            pattern = os.path.join(
+                self._out_dir, 'adas_%s_telemetry_*.csv' % self._role)
+            files = sorted(glob.glob(pattern), key=os.path.getmtime)
+            stale = files[:-keep] if len(files) > keep else []
+            for f in stale:
+                try:
+                    os.remove(f)
+                except OSError:
+                    pass
+            if stale:
+                logging.info('[TELEMETRY] cleaned %d old csv (keep=%d)',
+                             len(stale), keep)
+        except Exception as e:
+            logging.debug('[TELEMETRY] cleanup error: %s', e)
 
     @property
     def path(self):
@@ -123,6 +188,8 @@ class Telemetry:
                 self._dropped += 1
 
     def _writer_loop(self):
+        # 保留清理放写盘线程：不阻塞控制线程构造 Telemetry（目录扫描走磁盘 IO）
+        self._cleanup_old_files()
         last_flush = time.monotonic()
         while self._running:
             try:
@@ -132,6 +199,8 @@ class Telemetry:
             if row is not None:
                 if row is _STOP:
                     break
+                if not self._ensure_open():
+                    continue
                 try:
                     self._writer.writerow(
                         [_fmt(row.get(f, '')) for f in FIELDS]
@@ -139,7 +208,7 @@ class Telemetry:
                 except Exception as e:
                     logging.debug('[TELEMETRY] writerow error: %s', e)
             now = time.monotonic()
-            if (now - last_flush) >= _FLUSH_INTERVAL_S:
+            if self._fh is not None and (now - last_flush) >= _FLUSH_INTERVAL_S:
                 try:
                     self._fh.flush()
                 except Exception:
@@ -163,22 +232,25 @@ class Telemetry:
             self._thread.join(timeout=1.0)
         except Exception:
             pass
-        # 排空残留队列，尽量不丢数据
+        # 排空残留队列，尽量不丢数据（懒建下若有残留行而文件未建，先补建）
         try:
             while True:
                 row = self._q.get_nowait()
                 if row is _STOP:
                     continue
+                if not self._ensure_open():
+                    break
                 self._writer.writerow([_fmt(row.get(f, '')) for f in FIELDS])
         except queue.Empty:
             pass
         except Exception:
             pass
-        try:
-            self._fh.flush()
-            self._fh.close()
-        except Exception:
-            pass
+        if self._fh is not None:
+            try:
+                self._fh.flush()
+                self._fh.close()
+            except Exception:
+                pass
 
 
 _STOP = object()

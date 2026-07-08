@@ -44,11 +44,55 @@ def _sweep(control_core, aux_cores, control_tid):
                 os.sched_setaffinity(tid, {control_core})
             else:
                 os.sched_setaffinity(tid, aux_cores)
+                # 控制线程启用 SCHED_FIFO 后，由它派生的新线程会继承实时策略；
+                # 这里把非控制线程一律降回 SCHED_OTHER（best-effort），保证
+                # 实时预算只属于控制主循环。
+                _demote_to_other(tid)
                 moved += 1
         except OSError:
             # 线程可能在枚举与设置之间退出（ESRCH），忽略。
             failed += 1
     return (moved, failed)
+
+
+def _demote_to_other(tid):
+    """非控制线程若持有实时调度策略，降回 SCHED_OTHER（失败忽略）。"""
+    try:
+        if not hasattr(os, 'sched_getscheduler'):
+            return
+        if os.sched_getscheduler(tid) != os.SCHED_OTHER:
+            os.sched_setscheduler(tid, os.SCHED_OTHER, os.sched_param(0))
+    except OSError:
+        pass
+
+
+def set_control_thread_fifo(prio):
+    """把控制主线程提升为 SCHED_FIFO 实时调度（best-effort）。
+
+    必须在控制主线程上、且在 isolate_control_core() **之后**调用——keeper 等
+    后台线程先创建完毕，不会继承 FIFO（之后新生的线程由 keeper 重扫降回
+    SCHED_OTHER）。失败（无权限 / 非 Linux）只记一次日志，控制节点照常以
+    SCHED_OTHER 运行，功能零影响。
+    """
+    if prio is None or prio <= 0:
+        return False
+    if not hasattr(os, 'sched_setscheduler'):
+        logger.info('[RT] sched_setscheduler 不可用，跳过 SCHED_FIFO')
+        return False
+    prio = max(1, min(int(prio), 99))
+    try:
+        os.sched_setscheduler(0, os.SCHED_FIFO, os.sched_param(prio))
+        logger.info('[RT] 控制主线程已提升 SCHED_FIFO prio=%d（tid=%d）',
+                    prio, os.getpid())
+        return True
+    except PermissionError:
+        logger.warning('[RT] 无权限设置 SCHED_FIFO（需 CAP_SYS_NICE 或非零 '
+                       'RLIMIT_RTPRIO，见 start_hil_adas.py 单元属性），'
+                       '保持 SCHED_OTHER 运行')
+        return False
+    except Exception as exc:
+        logger.warning('[RT] 设置 SCHED_FIFO 失败（忽略）：%r', exc)
+        return False
 
 
 def isolate_control_core(control_core=0, resweep_s=3.0):

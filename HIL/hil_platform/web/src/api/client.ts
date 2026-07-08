@@ -2,7 +2,7 @@
 // 默认相对路径（开发期由 Vite 代理到 8000，构建后由 FastAPI 同源托管）。
 import type {
   RunListItem, RunMeta, RunStates, RunEvent, Summary,
-  Status, ScenarioDef, FaultType, StateRow, HardwareHealth,
+  Status, ScenarioDef, FaultType, StateRow, HardwareHealth, CoreLayout,
 } from "../types/hil";
 
 const BASE = import.meta.env.VITE_API_BASE ?? "";
@@ -52,6 +52,7 @@ export const api = {
       req<HardwareHealth>("POST", "/api/hardware/gateway/start", { source }),
     deployGateway: () => req<HardwareHealth>("POST", "/api/hardware/gateway/deploy"),
     resources: () => req<HardwareHealth>("GET", "/api/hardware/resources"),
+    coreLayout: () => req<CoreLayout>("GET", "/api/hardware/core-layout"),
     applyCpu: () => req<HardwareHealth>("POST", "/api/hardware/cpu/apply"),
     startEdge: () => req<HardwareHealth>("POST", "/api/hardware/edge/start"),
     syncEdge: () => req<HardwareHealth>("POST", "/api/hardware/edge/sync"),

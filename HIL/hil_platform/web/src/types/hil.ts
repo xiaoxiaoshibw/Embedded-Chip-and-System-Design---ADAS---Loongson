@@ -46,6 +46,14 @@ export interface Esp32 {
   steer: number | null;
 }
 
+// 结构化安全诊断（镜像 Nano 端 CommandGate reason + AEB overlay level）
+export interface Diagnostics {
+  gate_reason: string;
+  gate_severity: number;
+  aeb_level: string;
+  aeb_drac: number | null;
+}
+
 // /ws/live 推送的一帧
 export interface LiveFrame {
   run_id: string | null;
@@ -57,6 +65,7 @@ export interface LiveFrame {
   nano_a: Controller | null;
   nano_b: Controller | null;
   esp32: Esp32 | null;
+  diagnostics: Diagnostics | null;
   event: string | null;
 }
 
@@ -153,6 +162,10 @@ export interface StateRow {
   takeover_count: number;
   safe_brake: number;
   event: string;
+  gate_reason: string | null;
+  gate_severity: number | null;
+  aeb_level: string | null;
+  aeb_drac: number | null;
 }
 
 export interface RunStates {
@@ -175,4 +188,53 @@ export interface HardwareHealth {
   primary?: HardwareCommandResult;
   backup?: HardwareCommandResult;
   [key: string]: unknown;
+}
+
+export interface CoreThread {
+  pid: number;
+  tid: number;
+  core: number;
+  cpu: number;
+  priority: number | null;
+  nice: number | null;
+  comm: string;
+  kind: "adas" | "ml" | "gateway" | "edge" | "lockstep" | "other";
+  args: string;
+}
+
+export interface CoreProcess {
+  pid: number;
+  args: string;
+  affinity: number[];
+  env: Record<string, string>;
+}
+
+export interface NanoCoreData {
+  hostname: string;
+  timestamp: number;
+  nproc: number;
+  loadavg: number[];
+  system_cpu: Record<string, number>;
+  processes: CoreProcess[];
+  threads: CoreThread[];
+  core_threads: Record<string, CoreThread[]>;
+}
+
+export interface CoreLayoutTarget {
+  target: string;
+  host: string;
+  ok: boolean;
+  rc: number | null;
+  stdout: string;
+  stderr: string;
+  elapsed_ms: number;
+  data: NanoCoreData | null;
+}
+
+export interface CoreLayout {
+  ok: boolean;
+  primary?: CoreLayoutTarget;
+  backup?: CoreLayoutTarget;
+  mapping: Record<string, string>;
+  core_plan: Record<string, string>;
 }

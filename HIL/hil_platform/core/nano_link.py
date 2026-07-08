@@ -32,7 +32,8 @@ class NanoLink:
         self._running = True
         self._send_lock = threading.Lock()
         self._command_lock = threading.Lock()
-        self._command_seq = 0
+        self._command_seq = int(time.time() * 1000)
+        self._last_runtime_send_t = 0.0
         self._runtime_params: Dict[str, Any] = {}
         try:
             self._sock = socket.create_connection(
@@ -73,7 +74,10 @@ class NanoLink:
 
     def send_sensor(self, payload: Dict[str, Any]) -> None:
         with self._command_lock:
-            if self._runtime_params:
+            now = time.monotonic()
+            if self._runtime_params and now - self._last_runtime_send_t >= 1.0:
+                self._command_seq += 1
+                self._last_runtime_send_t = now
                 payload = dict(payload)
                 payload["control"] = {
                     "seq": self._command_seq,
@@ -95,7 +99,7 @@ class NanoLink:
             return self._command_seq
         with self._command_lock:
             self._runtime_params.update(clean)
-            self._command_seq += 1
+            self._last_runtime_send_t = 0.0
             return self._command_seq
 
     def get_control(self) -> Dict[str, Any]:

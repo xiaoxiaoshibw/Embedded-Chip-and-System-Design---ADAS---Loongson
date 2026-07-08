@@ -85,13 +85,14 @@ class LockstepChecker:
         self._mismatch_run = 0
 
     def submit(self, now, signals, memory, managers, takeover_rate, ml_result,
-               main_delta, main_lon, main_aeb):
+               main_delta, main_lon, main_aeb, path_obstacles=None):
         """主线程调用：投递本拍前状态（已深拷贝）+ 主核输出。非阻塞，队列满则丢
-        （影子落后时跳过该拍，不产生误报）。"""
+        （影子落后时跳过该拍，不产生误报）。path_obstacles 同 ml_result 模式
+        原样复用，保证影子与主核 AEB 路径检查输入逐位一致。"""
         try:
             self._q.put_nowait((now, signals, memory, managers, takeover_rate,
                                 ml_result, float(main_delta), float(main_lon),
-                                bool(main_aeb)))
+                                bool(main_aeb), path_obstacles))
         except queue.Full:
             pass
 
@@ -119,10 +120,11 @@ class LockstepChecker:
                             self.checker_core, cur, self._inject)
                 announced = True
             (now, signals, memory, managers, takeover_rate, ml_result,
-             m_delta, m_lon, m_aeb) = item
+             m_delta, m_lon, m_aeb, path_obstacles) = item
             try:
                 shadow = run_pure_pipeline(now, signals, memory, managers,
-                                           takeover_rate, ml_result=ml_result)
+                                           takeover_rate, ml_result=ml_result,
+                                           path_obstacles=path_obstacles)
             except Exception as exc:
                 logger.warning('[LOCKSTEP] 影子计算异常（忽略本拍）：%r', exc)
                 self._mismatch_run = 0

@@ -94,6 +94,7 @@ export default function LivePage() {
   }), [frame]);
 
   const esp = frame?.esp32 ?? null;
+  const diag = frame?.diagnostics ?? null;
   const mock = status?.mock ?? true;
 
   return (
@@ -109,6 +110,9 @@ export default function LivePage() {
         activeController={esp?.active_controller ?? status?.active_controller ?? "none"}
         takeover={esp ? (esp.active_controller === "nano_b" || esp.active_controller === "safe_brake") : (status?.takeover ?? false)}
         safeBrake={esp?.safe_brake ?? status?.safe_brake ?? false}
+        gateReason={diag?.gate_reason ?? null}
+        gateSeverity={diag?.gate_severity ?? null}
+        aebLevel={diag?.aeb_level ?? null}
         connected={connected}
       />
 
@@ -127,16 +131,18 @@ export default function LivePage() {
 
       <MetricCards v={metricValues} />
 
-      <HardwareControlPanel controlSource={status?.control_source} />
+      {/* 硬件在环面板 + CARLA 面板仅在真实模式显示；mock 演示模式下隐藏（无真实 Nano/CARLA） */}
+      {!mock && <HardwareControlPanel controlSource={status?.control_source} />}
 
-      {/* CARLA 只作为真值世界、感知输入和闭环执行显示 */}
-      <div className="row">
-        <div style={{ flex: "2 1 460px" }}><CameraView active={!mock} /></div>
-        <div style={{ flex: "1 1 320px" }}><WorldControlPanel mock={mock} /></div>
-      </div>
+      {!mock && (
+        <div className="row">
+          <div style={{ flex: "2 1 460px" }}><CameraView active={!mock} /></div>
+          <div style={{ flex: "1 1 320px" }}><WorldControlPanel mock={mock} /></div>
+        </div>
+      )}
 
       <div className="row">
-        <div style={{ flex: "1 1 240px" }}><NanoPanel name="Nano A（主控）" ctrl={frame?.nano_a ?? null} active={esp?.active_controller === "nano_a"} /></div>
+        <div style={{ flex: "1 1 240px" }}><NanoPanel name="龙芯（主控）" ctrl={frame?.nano_a ?? null} active={esp?.active_controller === "nano_a"} /></div>
         <div style={{ flex: "1 1 240px" }}><NanoPanel name="Nano B（备控）" ctrl={frame?.nano_b ?? null} active={esp?.active_controller === "nano_b"} /></div>
         <div style={{ flex: "1 1 240px" }}><Esp32Panel esp={esp} /></div>
       </div>

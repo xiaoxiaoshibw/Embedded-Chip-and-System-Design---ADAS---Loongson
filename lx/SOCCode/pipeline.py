@@ -17,7 +17,9 @@ signals / memory / managers（与在线完全相同的副作用顺序）。
 import copy
 from dataclasses import dataclass
 
+from config import DRIVER_SET_SPEED, ROAD_LIMIT_SPEED, SYSTEM_MAX_CRUISE
 from lateral import lane_margins_from_width
+from control.aeb_path_check import fuse_path_decision, obstacles_from_lead_ctx
 from control.lateral_controller import compute_lateral_command
 from control.longitudinal_policy import (
     compute_longitudinal_policy,
@@ -72,15 +74,19 @@ def update_lane_state(now, signals, memory, lane_est):
 
 
 def run_pure_pipeline(now, signals, memory, managers, takeover_rate=None,
-                      ml_result=_UNSET):
+                      ml_result=_UNSET, path_obstacles=None):
     """执行单周期纯控制计算，返回 PipelineResult。
 
     与原 _control_loop_impl 中对应段落逐行等价：
       lane → lateral → lead → curve_hold → aeb_alert → longitudinal
-      → 边界制动取大 → lon_smooth → 非AEB限幅
+      → AEB 路径检查融合（可选）→ 边界制动取大 → lon_smooth → 非AEB限幅
     takeover_rate 由调用方传入（在线=接管窗内的强制限速 / None；离线=None）。
     ml_result 缺省（_UNSET）时由本内核自行调 ml_bridge；锁步影子核可显式传入主核
     本拍的 ml_result 复用，保证两遍计算确定性一致且不触碰真实 ml_bridge。
+    path_obstacles（同 ml_result 模式）：主核（node）从 PerceptionFrame 构建后
+    传入，并原样投给锁步影子核保证逐位一致；None 时若路径检查启用，则由本内核
+    从 lead_ctx 合成单目标列表（离线 replay/run_scenario 路径）。
+    managers.aeb_path is None（默认）→ 本段完全不参与，与原行为字节级一致。
     """
     # ── 0. 超车状态机（双车道）：在最早执行，依据上一拍 LeadTracker 状态决定
     # 本拍 target_lane_offset / suppress_lead_for_overtake。
@@ -131,6 +137,17 @@ def run_pure_pipeline(now, signals, memory, managers, takeover_rate=None,
         ml_result=ml_result,
     )
 
+    # ── AEB 预测路径碰撞检查（可选，对标 Autoware AEB node）──
+    # 只增不减：仅通过 max() 抬高制动；触发时 aeb_active=True 走既有 AEB 通路
+    # （lon_smooth AEB 速率 / CommandGate aeb_override / 心跳 AEB 标志自动生效）。
+    aeb_path = getattr(managers, 'aeb_path', None)
+    if aeb_path is not None:
+        if path_obstacles is None:
+            path_obstacles = obstacles_from_lead_ctx(lead_ctx)
+        path_decision = aeb_path.evaluate(
+            signals.ego_v, lateral_ctx.delta, path_obstacles)
+        lon_ctx = fuse_path_decision(lon_ctx, path_decision)
+
     # 边界制动优先级高于常规纵向输出，避免接近车道边缘仍给油。
     lon_cmd = lon_ctx.lon_cmd
     if lateral_ctx.boundary_brake > 0.0:
@@ -164,6 +181,11 @@ def run_pure_pipeline(now, signals, memory, managers, takeover_rate=None,
             signals.ego_v,
             boundary_brake_active=(lateral_ctx.boundary_brake > 0.0),
             raw_lead_v_proj=lead_ctx.raw_lead_v_proj,
+            target_speed_mps=min(
+                float(getattr(memory, 'driver_set_speed', DRIVER_SET_SPEED)),
+                float(getattr(memory, 'system_max_cruise', SYSTEM_MAX_CRUISE)),
+                float(getattr(memory, 'road_limit_speed', ROAD_LIMIT_SPEED)),
+            ),
         )
 
     return PipelineResult(

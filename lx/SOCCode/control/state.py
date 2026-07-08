@@ -59,6 +59,10 @@ class LongitudinalContext:
     acc_ff_before: float = 0.0                # 前车加速度 FF 限幅前
     acc_ff_after: float = 0.0                 # 前车加速度 FF 限幅后
     closing_speed: float = 0.0                # 接近速度 (m/s)
+    # ── AEB 预测路径碰撞检查诊断（control/aeb_path_check.py；仅启用时回填）──
+    aeb_path_risk: bool = False               # 本拍路径/RSS 命中（未消抖）
+    aeb_path_tcol: float = float('inf')       # 最早预测碰撞时间 (s)
+    aeb_rss_dist: float = 0.0                 # 触发目标 RSS 最小安全距离 (m)
 
 
 @dataclass

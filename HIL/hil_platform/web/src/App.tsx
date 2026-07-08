@@ -14,8 +14,14 @@ export default function App() {
         <NavLink to="/replay" className={({ isActive }) => "navlink" + (isActive ? " active" : "")}>
           历史回放
         </NavLink>
+        <NavLink to="/cores" className={({ isActive }) => "navlink" + (isActive ? " active" : "")}>
+          四核调度
+        </NavLink>
+        <NavLink to="/loongson-cloud" className={({ isActive }) => "navlink" + (isActive ? " active" : "")}>
+          龙芯上云
+        </NavLink>
         <div className="spacer" />
-        <span className="faint">CARLA + 双 Nano + ESP32 仲裁 · HIL 闭环</span>
+        <span className="faint">CARLA + 龙芯主控 + Nano 热备 + ESP32 仲裁 · HIL 闭环</span>
       </nav>
       <Outlet />
     </div>

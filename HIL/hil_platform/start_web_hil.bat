@@ -13,10 +13,10 @@ if "%WEB_PORT%"=="" set "WEB_PORT=5173"
 set "GATEWAY_HOST=10.218.44.10"
 set "BACKUP_HOST=10.218.44.155"
 set "PC_HOST=10.218.44.190"
-set "PRIMARY_ADAS_CPUS=0,1"
-set "PRIMARY_GATEWAY_CPUS=2"
-set "BACKUP_ADAS_CPUS=0,1"
-set "BACKUP_EDGE_CPUS=2,3"
+set "PRIMARY_ADAS_CPUS=0,1,2"
+set "PRIMARY_GATEWAY_CPUS=1"
+set "BACKUP_ADAS_CPUS=0,1,2"
+set "BACKUP_EDGE_CPUS=3"
 
 echo ============================================================
 echo  ADAS HIL WebUI launcher

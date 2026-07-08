@@ -262,6 +262,26 @@ class RealHilBridge(HilBridge):
         self._active_candidate = CTRL_NANO_A
         self._active_stable = 0
 
+    def stop_run(self) -> None:
+        """Stop the current control link without tearing down the CARLA world.
+
+        The live demo path needs stop -> load another scenario to be cheap and
+        reliable. Destroying CARLA actors on every stop can block if the
+        simulator is busy or already closing, so keep world cleanup for reset()
+        and for the next load() call.
+        """
+        if self.nano_link is not None:
+            self.nano_link.close()
+            self.nano_link = None
+        self.arbiter.reset()
+        self.seq_a = self.seq_b = self._sensor_seq = 0
+        self.collided = False
+        self._last_active = CTRL_NANO_A
+        self._takeovers = 0
+        self._active_committed = CTRL_NANO_A
+        self._active_candidate = CTRL_NANO_A
+        self._active_stable = 0
+
     def close(self) -> None:
         if self.nano_link is not None:
             self.nano_link.close()

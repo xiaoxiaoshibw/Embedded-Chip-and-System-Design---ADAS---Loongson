@@ -18,7 +18,7 @@ export function fmtTtc(v: number | null | undefined): string {
 
 // 控制器 → 中文标签 + 徽章样式
 export const controllerLabel: Record<ActiveController, string> = {
-  nano_a: "Nano A 主控",
+  nano_a: "龙芯 主控",
   nano_b: "Nano B 接管",
   safe_brake: "安全制动",
   none: "未运行",

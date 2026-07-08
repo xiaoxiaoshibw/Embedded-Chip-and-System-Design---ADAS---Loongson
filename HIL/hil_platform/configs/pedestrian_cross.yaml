@@ -1,0 +1,15 @@
+# Pedestrian crossing AEB scenario
+scenario: pedestrian_cross
+title: 行人横穿 AEB
+map: Town04
+description: 行人从相邻侧横穿本车道，SOC 端依据行人类别 lead_cls=3 提前触发 AEB。
+params:
+  ego_speed: 35
+  front_distance: 22
+  front_speed: 0
+  pedestrian_speed: 1.2
+  weather: clear
+  comm_delay_ms: 0
+  sensor_noise: 0.0
+  fault_type: none
+  fault_trigger_time: 0

@@ -119,6 +119,29 @@ class Esp32State:
 
 
 @dataclass
+class DiagnosticsState:
+    """结构化安全诊断：镜像 Nano 端 CommandGate reason + AEB overlay level，
+    供 HIL 平台把“安全层”可视化（真实 ADAS 强调安全裁决可观测、可取证）。
+
+    - gate_reason: normal / aeb_override / backup_takeover / ctrl_error …（与 Nano 端一致）
+    - aeb_level:   safe / warning / emergency（按 TTC 分级）
+    - aeb_drac:    避撞所需减速度 closing²/(2·dist)
+    """
+    gate_reason: str = "normal"
+    gate_severity: int = 0
+    aeb_level: str = "safe"
+    aeb_drac: float = 0.0
+
+    def to_dict(self) -> Dict[str, Any]:
+        return {
+            "gate_reason": self.gate_reason,
+            "gate_severity": int(self.gate_severity),
+            "aeb_level": self.aeb_level,
+            "aeb_drac": _f(self.aeb_drac),
+        }
+
+
+@dataclass
 class StateFrame:
     """一帧完整仿真状态。"""
     t: float = 0.0                       # 场景时间 scenario_time (s)
@@ -127,6 +150,7 @@ class StateFrame:
     nano_a: ControllerState = field(default_factory=ControllerState)
     nano_b: ControllerState = field(default_factory=ControllerState)
     esp32: Esp32State = field(default_factory=Esp32State)
+    diagnostics: DiagnosticsState = field(default_factory=DiagnosticsState)
     event: Optional[str] = None          # 该帧触发的事件类型（如 TAKEOVER）
 
     # ── 序列化 ──
@@ -142,6 +166,7 @@ class StateFrame:
             "nano_a": self.nano_a.to_dict(),
             "nano_b": self.nano_b.to_dict(),
             "esp32": self.esp32.to_dict(),
+            "diagnostics": self.diagnostics.to_dict(),
             "event": self.event,
         }
 
@@ -175,4 +200,9 @@ class StateFrame:
             "takeover_count": int(self.esp32.takeover_count),
             "safe_brake": int(bool(self.esp32.safe_brake)),
             "event": self.event or "",
+            # 结构化安全诊断（镜像 Nano CommandGate/AEB overlay）
+            "gate_reason": self.diagnostics.gate_reason,
+            "gate_severity": int(self.diagnostics.gate_severity),
+            "aeb_level": self.diagnostics.aeb_level,
+            "aeb_drac": num(self.diagnostics.aeb_drac, 3),
         }

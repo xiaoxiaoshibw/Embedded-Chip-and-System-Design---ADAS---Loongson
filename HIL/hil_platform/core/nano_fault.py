@@ -93,15 +93,16 @@ class NanoFaultController:
         adas_role = self._hosts[role]["role"]
         pw = self._hosts[role]["pw"]
         cpu_env = (
-            os.environ.get("PRIMARY_ADAS_CPUS", "0,1")
+            os.environ.get("PRIMARY_ADAS_CPUS", "0,1,2")
             if role == "primary"
-            else os.environ.get("BACKUP_ADAS_CPUS", "0,1")
+            else os.environ.get("BACKUP_ADAS_CPUS", "0,1,2")
         )
         cmd = (
             "cd /home/jetson/adas/hil && "
             "source /opt/ros/foxy/setup.bash 2>/dev/null; "
             "export ROS_DOMAIN_ID=43 ROS_LOCALHOST_ONLY=0; "
             "export ADAS_CPU_LIST='%s'; "
+            "export RT_CONTROL_CORE=0 RT_AUX_CORES=1 LOCKSTEP_ENABLED=1 LOCKSTEP_CHECKER_CORE=2; "
             "python3 /home/jetson/adas/hil/start_hil_adas.py --role %s --sudo-password '%s'"
         ) % (cpu_env.replace("'", "'\"'\"'"), adas_role, pw.replace("'", "'\"'\"'"))
         self._exec(role, cmd, timeout=20)

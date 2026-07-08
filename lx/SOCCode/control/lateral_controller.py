@@ -29,6 +29,9 @@ from config import (
     CURVE_CTE_BOOST_SCALE,
     CURVE_FF_ATTEN_MAX,
     CURVE_FF_ATTEN_SCALE,
+    CURV_GUARD_LEAD_MARGIN,
+    CURV_GUARD_RELEASE_RATE,
+    CURV_IN_CURVE_EXIT_RATIO,
     CURV_NO_ACCEL_THRESH,
     I_DECAY_IN_CORNER,
     K_CTE,
@@ -197,9 +200,28 @@ def compute_lateral_command(now: float,
     else:
         raw_curv = 0.0
     memory.filtered_curv += curv_alpha * (raw_curv - memory.filtered_curv)
-    # 取原始与滤波的较大绝对值作为保护值
-    curv_guard = max(abs(memory.filtered_curv), abs(raw_curv))
-    in_curve = curv_guard > CURV_NO_ACCEL_THRESH
+    # ── 曲率保护值：抗尖刺 + 快攻击/慢释放峰值保持 ──
+    # road_psi 按离散路点更新，其变化率 rrate 出现单样本尖刺，raw_curv=rrate/ego_v
+    # 随之尖刺（实测可达邻样本数十倍，如 0.0001↔0.0687）。旧实现
+    # curv_guard=max(|filtered|,|raw|) 把尖刺直接透传给下游
+    # v_curve_max=sqrt(a/curv_guard)，导致弯道目标速度瞬间塌缩再弹回，表现为
+    # "拐弯速度跳变/突然停、TTC 抖动"。这里：
+    #   1) 把 raw 对 guard 的贡献限制在 filtered + 余量内——保留弯道入口 raw
+    #      领先 filtered 的提前量（安全：不延迟减速），同时拒绝远超滤波趋势的噪声尖峰；
+    #   2) guard 立即上攻到该值，但只能以受限速率向下释放——消除阈值附近的上下抖动。
+    # memory.curv_guard / memory.in_curve 跨拍保持峰值保持状态与滞回锁存。
+    raw_abs = abs(raw_curv)
+    filt_abs = abs(memory.filtered_curv)
+    guard_in = max(filt_abs, min(raw_abs, filt_abs + CURV_GUARD_LEAD_MARGIN))
+    memory.curv_guard_hold = max(
+        guard_in, memory.curv_guard_hold - CURV_GUARD_RELEASE_RATE * dt)
+    curv_guard = memory.curv_guard_hold
+    # in_curve 滞回：进入用阈值，退出用 CURV_IN_CURVE_EXIT_RATIO×阈值，消除边界翻转
+    if memory.in_curve_latch:
+        in_curve = curv_guard > (CURV_NO_ACCEL_THRESH * CURV_IN_CURVE_EXIT_RATIO)
+    else:
+        in_curve = curv_guard > CURV_NO_ACCEL_THRESH
+    memory.in_curve_latch = in_curve
     if in_curve:
         memory.last_curve_t = now
 

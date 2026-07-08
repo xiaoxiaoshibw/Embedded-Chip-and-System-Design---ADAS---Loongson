@@ -63,9 +63,9 @@ app.add_middleware(
 _INT_FIELDS = {
     "nano_a_seq", "nano_a_alive", "nano_a_valid_output",
     "nano_b_seq", "nano_b_alive", "nano_b_valid_output",
-    "takeover_count", "safe_brake",
+    "takeover_count", "safe_brake", "gate_severity",
 }
-_STR_FIELDS = {"active_controller", "event"}
+_STR_FIELDS = {"active_controller", "event", "gate_reason", "aeb_level"}
 
 
 def _guard(fn):
@@ -156,6 +156,11 @@ def hardware_deploy_gateway():
 @app.get("/api/hardware/resources")
 def hardware_resources():
     return _guard(lambda: hardware_control.resource_status())
+
+
+@app.get("/api/hardware/core-layout")
+def hardware_core_layout():
+    return _guard(lambda: hardware_control.core_layout())
 
 
 @app.post("/api/hardware/cpu/apply")
@@ -448,6 +453,7 @@ def _mount_spa():
 
     @app.get("/live", response_class=HTMLResponse)
     @app.get("/replay", response_class=HTMLResponse)
+    @app.get("/cores", response_class=HTMLResponse)
     def spa_page():
         with open(os.path.join(_WEB_DIST, "index.html"), "r", encoding="utf-8") as fh:
             return fh.read()

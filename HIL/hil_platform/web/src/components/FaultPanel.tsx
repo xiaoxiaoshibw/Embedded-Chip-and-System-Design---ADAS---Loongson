@@ -6,10 +6,10 @@ import type { FaultType } from "../types/hil";
 interface FaultBtn { label: string; type: FaultType; target: string; danger?: boolean; }
 
 const FAULTS: FaultBtn[] = [
-  { label: "Nano A 断心跳", type: "heartbeat_loss", target: "nano_a" },
-  { label: "Nano A seq 停止", type: "seq_stuck", target: "nano_a" },
-  { label: "Nano A 输出 NaN", type: "nan_output", target: "nano_a" },
-  { label: "Nano A 控制延迟", type: "control_delay", target: "nano_a" },
+  { label: "龙芯 断心跳", type: "heartbeat_loss", target: "nano_a" },
+  { label: "龙芯 seq 停止", type: "seq_stuck", target: "nano_a" },
+  { label: "龙芯 输出 NaN", type: "nan_output", target: "nano_a" },
+  { label: "龙芯 控制延迟", type: "control_delay", target: "nano_a" },
   { label: "Nano B 接管失败", type: "backup_fail", target: "nano_b" },
   { label: "双路失败安全制动", type: "dual_fail", target: "both", danger: true },
 ];

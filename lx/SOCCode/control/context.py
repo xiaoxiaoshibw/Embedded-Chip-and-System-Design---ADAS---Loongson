@@ -12,7 +12,18 @@ import threading
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING
 
-from config import ACC_KA, ACC_KD, ACC_KI, ACC_KV, K_PSI_D, K_PSI_I, K_PSI_P
+from config import (
+    ACC_KA,
+    ACC_KD,
+    ACC_KI,
+    ACC_KV,
+    DRIVER_SET_SPEED,
+    K_PSI_D,
+    K_PSI_I,
+    K_PSI_P,
+    ROAD_LIMIT_SPEED,
+    SYSTEM_MAX_CRUISE,
+)
 
 if TYPE_CHECKING:
     from control.aeb_alert import AebAlertManager
@@ -125,6 +136,8 @@ class ControlMemory:
     filtered_cte: float = 0.0               # 低通滤波后的横向偏移
     cte_prev: float = 0.0                   # 上一拍 CTE（用于微分）
     filtered_curv: float = 0.0              # 低通滤波后的曲率
+    curv_guard_hold: float = 0.0            # 曲率保护峰值保持（抗尖刺 + 慢释放跨拍状态）
+    in_curve_latch: bool = False            # in_curve 滞回锁存（防边界 0/1 翻转）
     filtered_v_tgt: float = 0.0             # 低通滤波后的目标速度
     filtered_lead_v_proj: float = 0.0       # 低通滤波后的前车投影速度
     last_lead_v_proj: float = 0.0           # 上一拍前车投影速度
@@ -140,6 +153,10 @@ class ControlMemory:
     lane_warn_margin: float = 0.0           # 车道预警余量 (m)
     lane_hard_margin: float = 0.0            # 车道硬边界余量 (m)
     gains: ControlGains = field(default_factory=ControlGains)  # 运行时控制增益
+    driver_set_speed: float = DRIVER_SET_SPEED
+    system_max_cruise: float = SYSTEM_MAX_CRUISE
+    road_limit_speed: float = ROAD_LIMIT_SPEED
+    runtime_command_seq: int = 0
     # 横向控制帧门控：仿真端以 20Hz 发布感知，本循环以 100Hz 运行，
     # 仅在道路航向有新帧时推进横向有状态计算，其余拍沿用上一帧结果。
     lat_last_road_rx: float = -1.0           # 上次已处理的道路航向帧接收时刻
@@ -196,3 +213,7 @@ class ControlManagers:
     # 前车状态估计器（可选，LEAD_ESTIMATOR='kalman' 时创建）。None=走 legacy
     # 有限差分加速度路径，与改造前逐字节一致。见 control/lead_estimator.py。
     lead_estimator: object = None
+    # AEB 预测路径碰撞检查器（可选，AEB_PATH_CHECK_ENABLED 时创建）。None=关，
+    # 与改造前字节级一致。仅持一个消抖计数器，锁步深拷贝/pickle 廉价。
+    # 见 control/aeb_path_check.py。
+    aeb_path: object = None

@@ -74,10 +74,28 @@
 /* =========================================================
  * 通信看门狗参数
  * ========================================================= */
-/* 看门狗超时：两路 Jetson 都超过此时间无有效帧 → 紧急制动 */
-#define WATCHDOG_TIMEOUT_MS     200
-/* 看门狗检查周期 */
-#define WATCHDOG_CHECK_MS       50
+/* 看门狗超时：两路 Jetson 都超过此时间无有效帧 → 紧急制动。
+ * 2026-07-03 由 200ms 压缩到 60ms（3.3×），依据 SIL 实测（非理论推导）：
+ * lx/SOCCode/control/virtual_esp32_watchdog.py（本函数+arbitrate()的最小
+ * Python 移植）+ lx/SOCCode/experiment_watchdog_limit.py（110 次/配置扫描，
+ * 结果 watchdog_limit_result.json）。三类试验：
+ *   1) 双杀（真双路静默）：WD=60ms 时检测延迟中位 61.5ms、最坏 73.7ms。
+ *   2) 单杀+冷启动备控（假设 BACKUP_HOT_STANDBY=False）：验证
+ *      "须 > JETSON_TIMEOUT_MS(58)" 这条耦合约束——实测结果精确卡在这个
+ *      边界：WD=60ms 时 0/22 误触发，WD=58ms 时已 17/22，WD≤56ms 稳定
+ *      22/22 误触发（主控刚死、备控还没来得及发第一帧就被判"双路失效"）。
+ *   3) 最坏抖动重合：两路"同时"各发生一次 2026-07 实机 LOOP TIMING 真实
+ *      抓到的最坏单拍延迟（49.44ms，硬化前）当纯抖动（非故障）注入，测
+ *      是否误触发——WD=60ms 距这个真实数字有 ~10ms 余量，不触发。
+ * 未选 SIL 测出的裸下限 50ms：50ms 只在"热待机常开"这一个假设下成立，对
+ * 49.44ms 实测抖动仅 0.56ms 余量，且假设一旦不成立（第2类约束）就会在
+ * 20/22 试验里误触发。60ms 同时满足全部三类约束（含热待机被关闭的场景），
+ * 是本次压缩后的实际部署值，与 lx/SOCCode/heartbeat.py 的
+ * JETSON_TIMEOUT_MS=58 保持"看门狗阈值 > 接管阈值"的既有耦合关系。
+ * 改动须同步 HIL/carla_bridge/pc/bridge_config.py 同名常量。*/
+#define WATCHDOG_TIMEOUT_MS     60
+/* 看门狗检查周期：与 WATCHDOG_TIMEOUT_MS 保持 4:1（200/50 的原比例） */
+#define WATCHDOG_CHECK_MS       15
 /* ESP-IDF 任务看门狗超时（秒）：控制任务卡死超过此时间 → 硬件复位 */
 #define TWDT_TIMEOUT_S          3
 

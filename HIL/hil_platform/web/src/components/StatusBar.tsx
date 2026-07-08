@@ -11,6 +11,9 @@ interface Props {
   activeController: ActiveController;
   takeover: boolean;
   safeBrake: boolean;
+  gateReason?: string | null;
+  gateSeverity?: number | null;
+  aebLevel?: string | null;
   connected?: boolean;
 }
 
@@ -21,6 +24,19 @@ function Item({ k, children }: { k: string; children: React.ReactNode }) {
       <span className="v">{children}</span>
     </div>
   );
+}
+
+// 门控 severity → 徽章配色：0 正常 / 1 告警 / 2 严重
+function sevBadge(sev: number | null | undefined): string {
+  if (sev == null) return "ok";
+  return sev >= 2 ? "danger" : sev >= 1 ? "warn" : "ok";
+}
+
+// AEB 等级 → 徽章配色
+function aebBadge(level: string | null | undefined): string {
+  if (level === "emergency") return "danger";
+  if (level === "warning") return "warn";
+  return "ok";
 }
 
 export function StatusBar(p: Props) {
@@ -49,6 +65,20 @@ export function StatusBar(p: Props) {
           <span className="dot" />{p.safeBrake ? "触发" : "未触发"}
         </span>
       </Item>
+      {p.gateReason != null && (
+        <Item k="门控裁决">
+          <span className={"badge " + sevBadge(p.gateSeverity)}>
+            <span className="dot" />{p.gateReason}
+          </span>
+        </Item>
+      )}
+      {p.aebLevel != null && (
+        <Item k="AEB等级">
+          <span className={"badge " + aebBadge(p.aebLevel)}>
+            <span className="dot" />{p.aebLevel}
+          </span>
+        </Item>
+      )}
       {p.connected !== undefined && (
         <Item k="链路">
           <span className={"badge " + (p.connected ? "ok live" : "danger")}>

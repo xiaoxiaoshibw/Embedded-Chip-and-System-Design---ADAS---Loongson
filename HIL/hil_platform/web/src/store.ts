@@ -14,6 +14,7 @@ export interface Sample {
   lateral_error: number | null;
   brake: number | null;
   active: number; // 0=nano_a 1=nano_b 2=safe_brake
+  aeb_drac: number | null; // 避撞所需减速度 DRAC (m/s²)
 }
 
 const ACTIVE_CODE: Record<string, number> = { nano_a: 0, nano_b: 1, safe_brake: 2, none: 0 };
@@ -37,7 +38,11 @@ export const useLiveStore = create<LiveState>((set) => ({
   history: [],
   lastTimestamp: null,
   setConnected: (c) => set({ connected: c }),
-  setStatus: (s) => set({ status: s }),
+  setStatus: (s) =>
+    set((st) => ({
+      status: s,
+      frame: s.state === "RUNNING" ? st.frame : null,
+    })),
   clearHistory: () => set({ history: [], lastTimestamp: null }),
   ingest: (f) =>
     set((st) => {
@@ -55,6 +60,7 @@ export const useLiveStore = create<LiveState>((set) => ({
           lateral_error: f.ego.lateral_error,
           brake: f.esp32?.brake ?? null,
           active: ACTIVE_CODE[f.esp32?.active_controller ?? "none"] ?? 0,
+          aeb_drac: f.diagnostics?.aeb_drac ?? null,
         };
         const trimmed = [...history, sample].filter((s) => s.t >= t - WINDOW_S);
         next.history = trimmed;

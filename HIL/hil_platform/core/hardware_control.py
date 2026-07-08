@@ -9,6 +9,7 @@ source and actuator sink; these helpers only manage the hardware control path.
 from __future__ import annotations
 
 import concurrent.futures
+import json
 import os
 import socket
 import subprocess
@@ -27,10 +28,16 @@ DEFAULT_PRIMARY_ZT = "10.218.44.10"
 DEFAULT_BACKUP_ZT = "10.218.44.155"
 EDGE_REMOTE_DIR = "%s/edge_results" % REMOTE_DIR
 EDGE_LOCAL_DIR = Path(__file__).resolve().parents[1] / "edge_results"
-PRIMARY_ADAS_CPUS = os.environ.get("PRIMARY_ADAS_CPUS", "0,1")
-PRIMARY_GATEWAY_CPUS = os.environ.get("PRIMARY_GATEWAY_CPUS", "2")
-BACKUP_ADAS_CPUS = os.environ.get("BACKUP_ADAS_CPUS", "0,1")
-BACKUP_EDGE_CPUS = os.environ.get("BACKUP_EDGE_CPUS", "2,3")
+PRIMARY_ADAS_CPUS = os.environ.get("PRIMARY_ADAS_CPUS", "0,1,2")
+PRIMARY_GATEWAY_CPUS = os.environ.get("PRIMARY_GATEWAY_CPUS", "1")
+BACKUP_ADAS_CPUS = os.environ.get("BACKUP_ADAS_CPUS", "0,1,2")
+BACKUP_EDGE_CPUS = os.environ.get("BACKUP_EDGE_CPUS", "3")
+ADAS_RUNTIME_ENV = (
+    "RT_CONTROL_CORE=0 "
+    "RT_AUX_CORES=1 "
+    "LOCKSTEP_ENABLED=1 "
+    "LOCKSTEP_CHECKER_CORE=2 "
+)
 
 
 def _targets() -> Dict[str, Dict[str, Any]]:
@@ -314,8 +321,8 @@ def restart_adas(target: str) -> Dict[str, Any]:
         adas_cpus = _cpu_list_for_adas(t)
         return (
             "python3 '%s/stop_gateway.py' || true; "
-            "ADAS_CPU_LIST=%s python3 '%s/start_hil_adas.py' --role %s --domain %d --sudo-password '%s'"
-        ) % (REMOTE_DIR, _quote(adas_cpus), REMOTE_DIR, n["role"], ROS_DOMAIN_ID, pw)
+            "%sADAS_CPU_LIST=%s python3 '%s/start_hil_adas.py' --role %s --domain %d --sudo-password '%s'"
+        ) % (REMOTE_DIR, ADAS_RUNTIME_ENV, _quote(adas_cpus), REMOTE_DIR, n["role"], ROS_DOMAIN_ID, pw)
 
     result = _parallel(targets, cmd, timeout=120)
     result["ok"] = all(v.get("ok") for v in result.values())
@@ -405,6 +412,146 @@ def resource_status() -> Dict[str, Any]:
     result = _parallel(("primary", "backup"), lambda _t: cmd, timeout=30)
     result["ok"] = all(v.get("ok") for v in result.values())
     result["mapping"] = cpu_mapping()
+    return result
+
+
+_CORE_LAYOUT_PROBE = r"""
+import json
+import os
+import socket
+import subprocess
+import time
+
+PATTERNS = ("ADAS.py", "hil_ros_gateway.py", "edge_result_collector.py")
+
+
+def read_cmd(cmd):
+    try:
+        return subprocess.check_output(cmd, shell=True, text=True, stderr=subprocess.DEVNULL)
+    except Exception:
+        return ""
+
+
+def affinity(pid):
+    try:
+        return sorted(os.sched_getaffinity(int(pid)))
+    except Exception:
+        return []
+
+
+def environ(pid):
+    env = {}
+    try:
+        raw = open("/proc/%s/environ" % pid, "rb").read().split(b"\0")
+        for item in raw:
+            if b"=" in item:
+                k, v = item.split(b"=", 1)
+                key = k.decode("utf-8", "replace")
+                if key.startswith("ADAS_ML") or key.startswith("LOCKSTEP") or key in ("NANO_ROLE", "ROS_DOMAIN_ID"):
+                    env[key] = v.decode("utf-8", "replace")
+    except Exception:
+        pass
+    return env
+
+
+def classify(args, comm):
+    if "hil_ros_gateway.py" in args:
+        return "gateway"
+    if "edge_result_collector.py" in args:
+        return "edge"
+    if "ADAS.py" in args:
+        if "ml-infer" in comm:
+            return "ml"
+        if "lockstep-checker" in comm:
+            return "lockstep"
+        return "adas"
+    return "other"
+
+
+threads = []
+pids = {}
+ps = read_cmd("ps -L -eo pid,tid,psr,pcpu,pri,ni,comm,args --no-headers")
+for line in ps.splitlines():
+    parts = line.split(None, 7)
+    if len(parts) < 8:
+        continue
+    pid, tid, psr, pcpu, pri, ni, comm, args = parts
+    if not any(p in args for p in PATTERNS):
+        continue
+    try:
+        core = int(psr)
+        cpu = float(pcpu)
+    except ValueError:
+        continue
+    item = {
+        "pid": int(pid),
+        "tid": int(tid),
+        "core": core,
+        "cpu": cpu,
+        "priority": int(pri) if pri.lstrip("-").isdigit() else None,
+        "nice": int(ni) if ni.lstrip("-").isdigit() else None,
+        "comm": comm,
+        "kind": classify(args, comm),
+        "args": args[:180],
+    }
+    threads.append(item)
+    pids.setdefault(pid, {"pid": int(pid), "args": args[:180], "affinity": affinity(pid), "env": environ(pid)})
+
+system_cpu = {str(i): 0.0 for i in range(os.cpu_count() or 4)}
+ps_cpu = read_cmd("ps -eo psr,pcpu --no-headers")
+for line in ps_cpu.splitlines():
+    parts = line.split()
+    if len(parts) != 2:
+        continue
+    try:
+        system_cpu[str(int(parts[0]))] += float(parts[1])
+    except ValueError:
+        pass
+
+core_threads = {str(i): [] for i in range(os.cpu_count() or 4)}
+for item in threads:
+    core_threads.setdefault(str(item["core"]), []).append(item)
+for items in core_threads.values():
+    items.sort(key=lambda x: x["cpu"], reverse=True)
+
+print(json.dumps({
+    "hostname": socket.gethostname(),
+    "timestamp": time.time(),
+    "nproc": os.cpu_count() or 0,
+    "loadavg": list(os.getloadavg()) if hasattr(os, "getloadavg") else [],
+    "system_cpu": system_cpu,
+    "processes": list(pids.values()),
+    "threads": threads,
+    "core_threads": core_threads,
+}, ensure_ascii=False))
+"""
+
+
+def _core_layout_cmd(_target: str) -> str:
+    return "python3 - <<'PY'\n%s\nPY" % _CORE_LAYOUT_PROBE
+
+
+def core_layout() -> Dict[str, Any]:
+    """Return a video-friendly real-time view of the two Nano four-core layout."""
+    result = _parallel(("primary", "backup"), _core_layout_cmd, timeout=30)
+    for target in ("primary", "backup"):
+        r = result.get(target) or {}
+        data = None
+        if r.get("ok") and r.get("stdout"):
+            try:
+                data = json.loads(r["stdout"])
+            except ValueError as exc:
+                r["ok"] = False
+                r["stderr"] = (r.get("stderr") or "") + "\nparse core layout JSON failed: %s" % exc
+        r["data"] = data
+    result["ok"] = all((result.get(t) or {}).get("ok") for t in ("primary", "backup"))
+    result["mapping"] = cpu_mapping()
+    result["core_plan"] = {
+        "0": "100 Hz ADAS control loop",
+        "1": "HIL ROS gateway",
+        "2": "Software lockstep shadow controller",
+        "3": "Log collector / edge archive",
+    }
     return result
 
 

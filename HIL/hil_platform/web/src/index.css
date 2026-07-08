@@ -133,6 +133,161 @@ a { color: var(--accent); text-decoration: none; }
   color: var(--text-dim);
 }
 
+/* ── 四核调度展示 ── */
+.dual-core-layout {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+.core-panel { min-width: 0; }
+.core-panel-title {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+.core-panel-title h3 { margin-bottom: 4px; }
+.core-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+.core-card {
+  min-height: 170px;
+  background: var(--bg-elev);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 10px;
+}
+.core-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 8px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid var(--border);
+}
+.core-id {
+  font-family: var(--mono);
+  font-size: 24px;
+  font-weight: 800;
+  line-height: 1;
+}
+.core-role {
+  margin-top: 4px;
+  color: var(--text-dim);
+  font-size: 11px;
+}
+.core-cpu {
+  font-family: var(--mono);
+  color: var(--ok);
+  font-weight: 800;
+}
+.thread-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-top: 10px;
+}
+.thread-row {
+  display: grid;
+  grid-template-columns: 76px minmax(0, 1fr) 52px;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 7px;
+  border: 1px solid var(--border);
+  border-left-width: 3px;
+  border-radius: 6px;
+  background: var(--bg);
+  min-width: 0;
+}
+.thread-row.adas { border-left-color: var(--ok); }
+.thread-row.ml { border-left-color: var(--accent); }
+.thread-row.gateway { border-left-color: var(--warn); }
+.thread-row.edge { border-left-color: #9b59b6; }
+.thread-row.lockstep { border-left-color: var(--danger); }
+.thread-kind {
+  font-size: 10px;
+  font-weight: 800;
+  text-transform: uppercase;
+  color: var(--text);
+}
+.thread-name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--text-dim);
+  font-family: var(--mono);
+}
+.thread-cpu {
+  text-align: right;
+  color: var(--text);
+  font-family: var(--mono);
+  font-weight: 700;
+}
+.thread-empty {
+  color: var(--text-faint);
+  font-size: 12px;
+  padding: 10px 4px;
+}
+.evidence-row {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+  margin-top: 10px;
+}
+.evidence-box {
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--bg-elev);
+  padding: 9px 10px;
+}
+.evidence-label {
+  color: var(--text-faint);
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: .5px;
+  text-transform: uppercase;
+}
+.evidence-value {
+  margin-top: 4px;
+  font-family: var(--mono);
+  font-weight: 700;
+}
+.core-proc-table {
+  margin-top: 10px;
+  table-layout: fixed;
+}
+.core-proc-table th:nth-child(1), .core-proc-table td:nth-child(1) { width: 120px; }
+.core-proc-table th:nth-child(2), .core-proc-table td:nth-child(2) { width: 74px; }
+.core-proc-table th:nth-child(3), .core-proc-table td:nth-child(3) { width: 126px; }
+.core-proc-table td {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.core-plan {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 10px;
+}
+.plan-step {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  background: var(--bg-elev);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 11px 12px;
+}
+.plan-core {
+  font-family: var(--mono);
+  font-weight: 900;
+  color: var(--ok);
+}
+
 /* ── 按钮 ── */
 button {
   font-family: var(--sans); font-size: 13px; cursor: pointer;
@@ -192,4 +347,220 @@ td.mono, th.mono { font-family: var(--mono); }
 .disconnected-banner {
   background: var(--danger); color: #fff; padding: 6px 14px; border-radius: 7px;
   font-weight: 700; text-align: center;
+}
+
+@media (max-width: 1100px) {
+  .dual-core-layout,
+  .core-plan {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 700px) {
+  .core-grid,
+  .evidence-row {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* Loongson MQTT cloud screenshot page */
+.cloud-page {
+  min-height: calc(100vh - 47px);
+  padding: 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  background:
+    linear-gradient(135deg, rgba(47, 129, 247, .12), transparent 34%),
+    linear-gradient(180deg, #0b1016 0%, #101821 100%);
+}
+.cloud-hero {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 280px;
+  gap: 18px;
+  align-items: stretch;
+  padding: 22px 24px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: rgba(19, 27, 37, .86);
+}
+.cloud-kicker {
+  font-family: var(--mono);
+  color: var(--ok);
+  font-weight: 800;
+  letter-spacing: .5px;
+  text-transform: uppercase;
+}
+.cloud-hero h1 {
+  margin: 8px 0 10px;
+  font-size: 30px;
+  line-height: 1.2;
+  letter-spacing: 0;
+}
+.cloud-hero p {
+  max-width: 760px;
+  margin: 0;
+  color: var(--text-dim);
+  font-size: 15px;
+  line-height: 1.8;
+}
+.cloud-status-card {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 10px;
+  padding: 18px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--bg-card);
+}
+.cloud-big-number {
+  font-family: var(--mono);
+  font-size: 34px;
+  font-weight: 900;
+  color: var(--ok);
+}
+.cloud-topology {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 12px;
+}
+.cloud-node {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-height: 86px;
+  padding: 14px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--bg-card);
+}
+.cloud-node-index {
+  font-family: var(--mono);
+  font-size: 24px;
+  font-weight: 900;
+  color: var(--text-faint);
+}
+.cloud-node-name {
+  font-weight: 800;
+  font-size: 14px;
+}
+.cloud-node-value {
+  margin-top: 5px;
+  font-family: var(--mono);
+  font-weight: 800;
+}
+.cloud-node-value.ok,
+.cloud-ok { color: var(--ok); }
+.cloud-node-value.warn,
+.cloud-warn { color: var(--warn); }
+.cloud-dashboard {
+  display: grid;
+  grid-template-columns: 1.2fr .8fr;
+  gap: 12px;
+}
+.cloud-panel {
+  border-radius: 8px;
+}
+.cloud-flow {
+  display: grid;
+  grid-template-columns: minmax(120px, 1fr) 36px minmax(120px, 1fr) 36px minmax(120px, 1fr) 36px minmax(120px, 1fr);
+  align-items: center;
+  gap: 8px;
+}
+.cloud-flow div {
+  min-height: 58px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--bg-elev);
+  font-weight: 800;
+}
+.cloud-flow span {
+  height: 2px;
+  background: var(--accent);
+  position: relative;
+}
+.cloud-flow span::after {
+  content: "";
+  position: absolute;
+  right: -1px;
+  top: -4px;
+  border-left: 8px solid var(--accent);
+  border-top: 5px solid transparent;
+  border-bottom: 5px solid transparent;
+}
+.cloud-metrics {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 10px;
+  margin-top: 14px;
+}
+.cloud-metrics div {
+  padding: 11px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--bg-elev);
+}
+.cloud-metrics strong {
+  display: block;
+  font-family: var(--mono);
+  font-size: 24px;
+}
+.cloud-metrics span {
+  color: var(--text-dim);
+}
+.cloud-chart {
+  height: 192px;
+  display: grid;
+  grid-template-columns: repeat(12, 1fr);
+  align-items: end;
+  gap: 8px;
+  padding: 12px 6px 0;
+  border-bottom: 1px solid var(--border);
+}
+.cloud-chart i {
+  display: block;
+  border-radius: 5px 5px 0 0;
+  background: linear-gradient(180deg, var(--ok), var(--accent));
+}
+.cloud-chart-axis,
+.cloud-table-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+.cloud-chart-axis {
+  padding: 8px 6px 0;
+  color: var(--text-faint);
+  font-family: var(--mono);
+}
+.cloud-table-head h3 {
+  margin-bottom: 0;
+}
+
+@media (max-width: 1100px) {
+  .cloud-hero,
+  .cloud-dashboard,
+  .cloud-topology {
+    grid-template-columns: 1fr;
+  }
+  .cloud-flow {
+    grid-template-columns: 1fr;
+  }
+  .cloud-flow span {
+    width: 2px;
+    height: 22px;
+    justify-self: center;
+  }
+  .cloud-flow span::after {
+    right: -4px;
+    top: 15px;
+    border-top: 8px solid var(--accent);
+    border-left: 5px solid transparent;
+    border-right: 5px solid transparent;
+    border-bottom: 0;
+  }
 }

@@ -24,10 +24,11 @@ import math
 import os
 import sys
 
-from config import LANE_DEFAULT_WIDTH, LOOP_HZ
+from config import AEB_PATH_CHECK_ENABLED, LANE_DEFAULT_WIDTH, LOOP_HZ
 from lateral import LaneWidthEstimator, lane_margins_from_width
 from longitudinal import LonSmoothing
 from control.aeb_alert import AebAlertManager
+from control.aeb_path_check import AebPathChecker
 from control.context import ControlManagers, ControlMemory, VehicleSignals
 from control.curve_hold import CurveHoldManager
 from control.comfort import make_comfort_layer
@@ -74,6 +75,7 @@ def build_stack():
         lateral_model=make_lateral_model_controller(),
         comfort_layer=make_comfort_layer(dt=dt),
         lead_estimator=make_lead_estimator(),
+        aeb_path=AebPathChecker() if AEB_PATH_CHECK_ENABLED else None,
     )
     return VehicleSignals(), memory, managers
 

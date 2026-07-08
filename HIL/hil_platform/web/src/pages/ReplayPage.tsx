@@ -144,6 +144,9 @@ export default function ReplayPage() {
             scenarioTime={t} activeController={activeCtrl}
             takeover={activeCtrl === "nano_b" || activeCtrl === "safe_brake"}
             safeBrake={row?.safe_brake === 1}
+            gateReason={row?.gate_reason ?? null}
+            gateSeverity={row?.gate_severity ?? null}
+            aebLevel={row?.aeb_level ?? null}
           />
 
           <ReplayTimeline

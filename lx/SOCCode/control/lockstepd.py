@@ -128,13 +128,17 @@ class LockstepEngine(object):
         self._mismatch_run = 0
 
     def submit(self, now, signals, memory, managers, takeover_rate, ml_result,
-               main_delta, main_lon, main_aeb):
-        """执行影子计算并比较。"""
+               main_delta, main_lon, main_aeb, path_obstacles=None):
+        """执行影子计算并比较。
+
+        path_obstacles：主核构建的 AEB 路径检查障碍列表（同 ml_result 模式
+        原样复用，保证两遍计算逐位一致）；旧版主核不发该键 → None。
+        """
         try:
             # VehicleSignals 的 _lock 在主核侧已被剥离
             shadow = run_pure_pipeline(
                 now, signals, memory, managers, takeover_rate,
-                ml_result=ml_result,
+                ml_result=ml_result, path_obstacles=path_obstacles,
             )
         except Exception as exc:
             logging.warning('[LOCKSTEPD] 影子计算异常（忽略本拍）：%r', exc)
@@ -220,10 +224,12 @@ def main():
                     main_delta = msg.get('main_delta', 0.0)
                     main_lon = msg.get('main_lon', 0.0)
                     main_aeb = msg.get('main_aeb', False)
+                    path_obstacles = msg.get('path_obstacles')
 
                     engine.submit(now, signals, memory, managers,
                                   takeover_rate, ml_result,
-                                  main_delta, main_lon, main_aeb)
+                                  main_delta, main_lon, main_aeb,
+                                  path_obstacles=path_obstacles)
 
                     resp = pickle.dumps({
                         'type': 'submit_ack',

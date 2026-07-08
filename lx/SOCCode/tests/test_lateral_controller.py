@@ -197,6 +197,85 @@ class TestNormalDriving:
         assert ctx.delta > 0.0
 
 
+# ── 3b. 曲率保护值抗尖刺 + 滞回（拐弯抖动修复）─────────────────────────────────
+
+
+class TestCurvGuardSpikeReject:
+    """curv_guard 抗尖刺 + 快攻击慢释放峰值保持。"""
+
+    def _run_ramp(self, memory, now, dpsi, n, ego_v=10.0):
+        """以每拍 dpsi 的航向增量喂 n 拍，建立稳态曲率。返回最后一帧 ctx 和 now。"""
+        psi = 0.0
+        ctx = None
+        for _ in range(n):
+            now += 0.01
+            psi += dpsi
+            signals = _make_signals(ego_v=ego_v, road_psi=psi, ego_yaw=psi,
+                                    road_last_rx=now)
+            ctx = compute_lateral_command(now, signals, memory)
+        return ctx, now, psi
+
+    def test_single_raw_spike_not_passed_to_guard(self):
+        """单样本 raw_curv 尖刺不应整值透传到 curv_guard。
+
+        旧实现 curv_guard=max(|filtered|,|raw|) 会把尖刺直接放行，导致下游
+        v_curve_max 瞬间塌缩。新实现把 raw 对 guard 的贡献限制在 filtered+余量内。
+        """
+        from config import CURV_GUARD_LEAD_MARGIN
+        now = 100.0
+        memory = _make_memory()
+        # 建立平缓稳态曲率
+        ctx, now, psi = self._run_ramp(memory, now, dpsi=0.004, n=40)
+        filt_before = abs(memory.filtered_curv)
+        # 注入一拍大航向跳变 → raw_curv 尖刺
+        now += 0.01
+        psi_spike = psi + 0.30
+        signals = _make_signals(ego_v=10.0, road_psi=psi_spike, ego_yaw=psi,
+                                road_last_rx=now)
+        ctx = compute_lateral_command(now, signals, memory)
+        # raw_curv 确实出现大尖刺
+        assert abs(ctx.raw_curv) > filt_before + CURV_GUARD_LEAD_MARGIN
+        # 但 guard 被限制在 filtered+余量内（尖刺被拒绝）
+        assert ctx.curv_guard <= abs(memory.filtered_curv) + CURV_GUARD_LEAD_MARGIN + 1e-9
+        # 关键：guard 远小于 raw 尖刺
+        assert ctx.curv_guard < abs(ctx.raw_curv) - 1e-6
+
+    def test_guard_release_is_rate_limited(self):
+        """guard 向下释放受速率限制：raw 突然归零后 guard 不应一拍跳回滤波值。"""
+        from config import CURV_GUARD_RELEASE_RATE
+        now = 100.0
+        memory = _make_memory()
+        ctx, now, psi = self._run_ramp(memory, now, dpsi=0.01, n=40)
+        guard_hi = memory.curv_guard_hold
+        # 喂直道（航向不变）一拍，raw_curv→0，filtered 开始衰减
+        now += 0.01
+        signals = _make_signals(ego_v=10.0, road_psi=psi, ego_yaw=psi,
+                                road_last_rx=now)
+        ctx = compute_lateral_command(now, signals, memory)
+        # 单拍下降不超过释放速率 × dt（外加浮点容差）
+        assert ctx.curv_guard >= guard_hi - CURV_GUARD_RELEASE_RATE * 0.01 - 1e-9
+
+    def test_in_curve_hysteresis_no_chatter(self):
+        """in_curve 滞回：稳态弯道下 in_curve 不应逐拍翻转。"""
+        now = 100.0
+        memory = _make_memory()
+        # 喂一个临界曲率附近的稳态，统计 in_curve 翻转次数
+        ctx, now, psi = self._run_ramp(memory, now, dpsi=0.006, n=30)
+        toggles = 0
+        prev = memory.in_curve_latch
+        for _ in range(40):
+            now += 0.01
+            psi += 0.006
+            signals = _make_signals(ego_v=10.0, road_psi=psi, ego_yaw=psi,
+                                    road_last_rx=now)
+            ctx = compute_lateral_command(now, signals, memory)
+            if memory.in_curve_latch != prev:
+                toggles += 1
+            prev = memory.in_curve_latch
+        # 稳态弯道内最多一次状态确立，不应反复抖动
+        assert toggles <= 1, 'in_curve toggled %d times' % toggles
+
+
 # ── 4. Frame gating ───────────────────────────────────────────────────────────
 
 

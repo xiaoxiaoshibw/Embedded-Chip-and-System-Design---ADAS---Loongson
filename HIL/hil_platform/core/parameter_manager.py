@@ -17,6 +17,7 @@ PARAM_REGISTRY: Dict[str, tuple] = {
     "front_speed":             (35.0, float, 0.0, 200.0),   # 前车速度 km/h
     "cut_in_speed":            (40.0, float, 0.0, 200.0),   # 切入车速度 km/h
     "cut_in_trigger_distance": (25.0, float, 0.0, 300.0),   # 切入触发距离 m
+    "pedestrian_speed":        (1.6, float, 0.0, 5.0),      # 行人横穿速度 m/s
     "weather":                 ("clear", str, None, None),  # clear/rain/fog/night
     "comm_delay_ms":           (0.0, float, 0.0, 2000.0),   # 通信延迟 ms
     "sensor_noise":            (0.0, float, 0.0, 1.0),      # 传感器噪声比例

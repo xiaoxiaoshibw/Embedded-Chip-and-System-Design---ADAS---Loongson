@@ -1,0 +1,19 @@
+[Unit]
+Description=ADAS 物理按钮守护（pin40 按一下→刷新状态+重启 ADAS 服务）
+After=multi-user.target
+
+[Service]
+Type=simple
+User=root
+ExecStart=/usr/bin/python3 /home/jetson/adas/adas_button.py
+Restart=always
+RestartSec=3
+# 防 numpy/OpenBLAS 在 Nano 上 SIGILL（与 ADAS 服务一致）
+Environment=OPENBLAS_CORETYPE=ARMV8
+# 蜂鸣器极性：本批模块 IO 低电平才响（active-low）
+Environment=BUZZER_ACTIVE=low
+# 按钮极性：本批模块高电平有效（空闲=0，按下=1）——经 ESP32 实测确认，不再自动猜
+Environment=BUTTON_ACTIVE=high
+
+[Install]
+WantedBy=multi-user.target

@@ -66,6 +66,7 @@ export function LiveCharts() {
     lat: lineOption(history, (s) => s.lateral_error, "#f1c40f"),
     brake: lineOption(history, (s) => s.brake, "#e74c3c", { yMin: 0, yMax: 1 }),
     active: lineOption(history, (s) => s.active, "#e67e22", { step: true, yMin: 0, yMax: 2 }),
+    drac: lineOption(history, (s) => s.aeb_drac, "#c56cf0", { yMin: 0 }),
   }), [history]);
 
   return (
@@ -76,6 +77,7 @@ export function LiveCharts() {
       <Mini title="横向误差 (m)"><EChart option={opts.lat} height={150} /></Mini>
       <Mini title="刹车"><EChart option={opts.brake} height={150} /></Mini>
       <Mini title="生效控制器"><EChart option={opts.active} height={150} /></Mini>
+      <Mini title="AEB 避撞减速度 DRAC (m/s²)"><EChart option={opts.drac} height={150} /></Mini>
     </div>
   );
 }

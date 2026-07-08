@@ -31,6 +31,8 @@ STATE_FIELDS = [
     "nano_a_alive", "nano_a_seq", "nano_a_latency_ms", "nano_a_valid_output",
     "nano_b_alive", "nano_b_seq", "nano_b_latency_ms", "nano_b_valid_output",
     "active_controller", "takeover_count", "safe_brake", "event",
+    # 结构化安全诊断（追加在末尾，镜像 Nano CommandGate/AEB overlay）
+    "gate_reason", "gate_severity", "aeb_level", "aeb_drac",
 ]
 
 RUNS_DIR = os.path.normpath(

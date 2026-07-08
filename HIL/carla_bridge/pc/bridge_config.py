@@ -63,7 +63,12 @@ START_THROTTLE_SPEED_MPS = 0.5   # 低于该速度才启用起步最小油门
 # HB=0.035s/轮询5ms 时备机就绪~50ms，58ms 留~8ms 余量；接管≈47ms，原 150）。改此处须
 # 同步改 lx/MCUcode/ADAS_Test/main/main.c 同名宏，保持字节级一致。
 JETSON_TIMEOUT_MS = 58
-WATCHDOG_TIMEOUT_MS = 200
+# 2026-07-03 由 200ms 压缩到 60ms（3.3×），依据 lx/SOCCode/experiment_watchdog_limit.py
+# SIL 实测（完整推导+三类试验数字见 main.c 同名宏旁注释）：60ms 同时满足双杀延迟、
+# 冷启动耦合（须 > JETSON_TIMEOUT_MS=58）、真实最坏抖动（49.44ms）三类约束，是
+# 裸下限 50ms（仅在热待机常开时成立、对抖动仅 0.56ms 余量）之上留有安全边际的实际
+# 部署值。改此处须同步 lx/MCUcode/ADAS_Test/main/main.c 同名宏。
+WATCHDOG_TIMEOUT_MS = 60
 MCU_AEB_MAX_BRAKE_DECEL = 9.99
 MCU_AEB_MIN_CLOSING_SPEED = 0.6
 SAFE_DIST_SOFT_BUFFER = 3.0

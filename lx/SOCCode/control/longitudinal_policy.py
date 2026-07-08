@@ -118,7 +118,8 @@ def limit_non_aeb_lon(lon_cmd: float,
                       acc_has_lead: bool,
                       ego_v: float,
                       boundary_brake_active: bool = False,
-                      raw_lead_v_proj: Optional[float] = None) -> float:
+                      raw_lead_v_proj: Optional[float] = None,
+                      target_speed_mps: Optional[float] = None) -> float:
     """Apply final non-AEB longitudinal output limits.
 
     Boundary braking is a safety correction, so it must not be reduced by
@@ -128,6 +129,10 @@ def limit_non_aeb_lon(lon_cmd: float,
     if boundary_brake_active:
         return lon_cmd
 
+    cruise_limit = (
+        float(target_speed_mps) if target_speed_mps is not None
+        else min(DRIVER_SET_SPEED, SYSTEM_MAX_CRUISE, ROAD_LIMIT_SPEED)
+    )
     if acc_has_lead:
         match_brake_cap = clamp(
             lon_ctx.closing_speed / max(ACC_MATCH_TAU_S, 0.2) + ACC_MATCH_BRAKE_MARGIN,
@@ -140,9 +145,19 @@ def limit_non_aeb_lon(lon_cmd: float,
             and ego_v <= ((raw_lead_v_proj if raw_lead_v_proj is not None else lon_ctx.lead_v_proj) + 0.8)
         ):
             lon_cmd = min(lon_cmd, 0.2)
-    elif ego_v >= (min(DRIVER_SET_SPEED, SYSTEM_MAX_CRUISE, ROAD_LIMIT_SPEED) - 0.2):
+    elif ego_v >= (cruise_limit - 0.2):
         lon_cmd = max(lon_cmd, 0.0)
     return lon_cmd
+
+
+def _runtime_drive_cap(v_tgt: float, ego_v: float) -> float:
+    """ADAS-side cruise acceleration cap for HIL/runtime targets."""
+    speed_err = max(float(v_tgt) - float(ego_v), 0.0)
+    return clamp(
+        ACC_COMFORT_ACCEL + 0.10 * speed_err,
+        ACC_COMFORT_ACCEL,
+        ACC_DRIVE_MAX_LIMIT,
+    )
 
 
 def compute_longitudinal_policy(now: float,
@@ -295,11 +310,12 @@ def compute_longitudinal_policy(now: float,
             max_engage_dist=cls_engage_dist)
 
         # AEB 全制动确认计数
+        confirm_need = 1 if lead_ctx.lead_cls == ACTOR_CLASS_PEDESTRIAN else LEAD_CONFIRM_CYCLES
         aeb_target_valid = (
             aeb_allowed
             and is_finite(ttc)
             and dist <= cls_engage_dist
-            and lead_state.lead_confirm_count >= LEAD_CONFIRM_CYCLES
+            and lead_state.lead_confirm_count >= confirm_need
             and (
                 cls_bypass_minv
                 or lead_v_proj >= ACC_MIN_VALID_LEAD_V
@@ -385,6 +401,11 @@ def compute_longitudinal_policy(now: float,
                 acc_has_lead=True,
                 ego_v=signals.ego_v,
                 raw_lead_v_proj=raw_lead_v_proj,
+                target_speed_mps=min(
+                    float(getattr(memory, 'driver_set_speed', DRIVER_SET_SPEED)),
+                    float(getattr(memory, 'system_max_cruise', SYSTEM_MAX_CRUISE)),
+                    float(getattr(memory, 'road_limit_speed', ROAD_LIMIT_SPEED)),
+                ),
             )
 
     # ══════════════════════════════════════════════════════
@@ -398,6 +419,7 @@ def compute_longitudinal_policy(now: float,
         memory.filtered_v_tgt += VTGT_FILTER_ALPHA * (signals.ego_v - memory.filtered_v_tgt)
         v_hold = curve_hold_state.v_target
         v_err = signals.ego_v - v_hold
+        drive_cap = _runtime_drive_cap(v_hold, signals.ego_v)
         p_term = CURVE_HOLD_SPEED_KP * v_err
         curve_hold_state.v_i = clamp(
             curve_hold_state.v_i + v_err * memory.dt,
@@ -405,7 +427,7 @@ def compute_longitudinal_policy(now: float,
             CURVE_HOLD_I_MAX / max(CURVE_HOLD_SPEED_KI, 1e-6),
         )
         i_term = CURVE_HOLD_SPEED_KI * curve_hold_state.v_i
-        lon_cmd = clamp(p_term + i_term, -0.5, LON_CMD_MAX_BRAKE_DECEL)
+        lon_cmd = clamp(p_term + i_term, -drive_cap, LON_CMD_MAX_BRAKE_DECEL)
         memory.filtered_lon = lon_cmd
 
     # ══════════════════════════════════════════════════════
@@ -423,10 +445,15 @@ def compute_longitudinal_policy(now: float,
         cruise_drive_guard = acc_lead_loss_guard or lateral_ctx.in_curve or lead_ctx.recent_curve_exit
 
         # 目标速度取驾驶设定速度、系统上限和道路限速的较小值
-        v_tgt = min(DRIVER_SET_SPEED, SYSTEM_MAX_CRUISE, ROAD_LIMIT_SPEED)
+        v_tgt = min(
+            float(getattr(memory, 'driver_set_speed', DRIVER_SET_SPEED)),
+            float(getattr(memory, 'system_max_cruise', SYSTEM_MAX_CRUISE)),
+            float(getattr(memory, 'road_limit_speed', ROAD_LIMIT_SPEED)),
+        )
         # 弯道时根据侧向加速度限制目标速度
         v_curve_max = math.sqrt(CORNERING_MAX_LAT_ACCEL / max(lateral_ctx.curv_guard, 1e-6))
         v_tgt = min(v_tgt, v_curve_max)
+        drive_cap = _runtime_drive_cap(v_tgt, signals.ego_v)
 
         # ── 超车抑制旁路 ──
         # 上层把 lead_ctx.acc_has_lead 改成了 False（pipeline 里的 _replace），
@@ -492,7 +519,7 @@ def compute_longitudinal_policy(now: float,
                     -LON_CMD_MAX_DRIVE_ACCEL,
                     LON_CMD_MAX_BRAKE_DECEL,
                 )
-                raw_lon = clamp(raw_lon, -ACC_COMFORT_ACCEL, ACC_COMFORT_DECEL)
+                raw_lon = clamp(raw_lon, -drive_cap, ACC_COMFORT_DECEL)
             # 保护期内不产生负向加速度
             if cruise_drive_guard:
                 raw_lon = max(raw_lon, 0.0)

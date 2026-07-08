@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Fast DDS 单播发现 profile（跨子网 / ZeroTier 用，绕开多播发现）。
+  PC（Ubuntu/Jazzy）与两台 Nano（Foxy）两端都 export 后即可互相发现：
+      export FASTRTPS_DEFAULT_PROFILES_FILE=/路径/fastdds_peers.xml
+  改这里的 IP 为各端实际可达地址（默认填 ZeroTier 10.218.44.x）：
+      PC=10.218.44.190  primary Nano B=10.218.44.10  backup Nano A=10.218.44.155
+  同一 LAN 子网内无需本文件（多播开箱即用）。
+-->
+<dds xmlns="http://www.eprosima.com/XMLSchemas/fastRTPS_Profiles">
+  <profiles>
+    <participant profile_name="hil_unicast" is_default_profile="true">
+      <rtps>
+        <builtin>
+          <metatrafficUnicastLocatorList>
+            <locator>
+              <udpv4/>
+            </locator>
+          </metatrafficUnicastLocatorList>
+          <initialPeersList>
+            <!-- PC（CARLA + carla_ros_node） -->
+            <locator><udpv4><address>10.218.44.190</address></udpv4></locator>
+            <!-- Primary Nano B -->
+            <locator><udpv4><address>10.218.44.10</address></udpv4></locator>
+            <!-- Backup Nano A -->
+            <locator><udpv4><address>10.218.44.155</address></udpv4></locator>
+          </initialPeersList>
+        </builtin>
+      </rtps>
+    </participant>
+  </profiles>
+</dds>
