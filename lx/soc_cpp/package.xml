@@ -1,0 +1,22 @@
+<?xml version="1.0"?>
+<?xml-model href="http://download.ros.org/schema/package_format3.xsd" schematypens="http://www.w3.org/2001/XMLSchema"?>
+<package format="3">
+  <name>soc_cpp</name>
+  <version>0.0.1</version>
+  <description>
+    ADAS SOC 控制栈 C++ 重写（lx/SOCCode 的 C++ 版本）。core/ 为跨平台纯算法库，
+    ros_node/ 为 ROS2 Foxy rclcpp 节点，仅在装有 ROS2 的 Nano/龙芯上随 colcon 编译。
+  </description>
+  <maintainer email="noreply@example.com">ADAS Team</maintainer>
+  <license>Proprietary</license>
+
+  <buildtool_depend>ament_cmake</buildtool_depend>
+
+  <depend>rclcpp</depend>
+  <depend>std_msgs</depend>
+  <depend>geometry_msgs</depend>
+
+  <export>
+    <build_type>ament_cmake</build_type>
+  </export>
+</package>
