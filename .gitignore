@@ -65,16 +65,12 @@ __pycache__/
 仿真/
 IOT_TI/
 文档/
-CLAUDE.md
-**/CLAUDE.md
 
 # 编辑器 / 工具 / 系统
-.claude/
 .codex/
 .agents/
 .sisyphus/
 **/.sisyphus/
-CLAUDE_CODEX_MEMORY/
 AGENTS.md
 .omo/
 .idea/
